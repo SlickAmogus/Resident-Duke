@@ -127,11 +127,11 @@ onevent EVENT_PROCESSINPUT
     // Developer trace (re_debug): once a second.
     ifn re_debug 0
     {
-        set re_tmp re_ticks mod re_tmp 30
+        set re_tmp re_ticks mod re_tmp 5
         ife re_tmp 0
         {
             getplayer[THISACTOR].posx re_a getplayer[THISACTOR].posy re_b getplayer[THISACTOR].ang re_c
-            al re_raw al re_behavior al re_a al re_b al re_c al re_cam al re_jill al re_death_stage al re_shown_frame
+            al re_raw al re_behavior al re_a al re_b al re_c al re_cam al re_save_state al re_save_blink al re_pressed al re_menu_fade_mode
         }
     }
     // Camera: Jill's position, mid-body height and sector.

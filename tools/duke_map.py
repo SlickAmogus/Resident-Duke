@@ -39,11 +39,12 @@ DUKE_TO_RE = {
 }
 # Duke pickups with no RE counterpart in this slice are removed.
 DUKE_REMOVED = {22, 23, 24, 25, 26, 27, 29, 32, 37, 41, 42, 44, 45, 46, 47, 54, 55, 56, 57, 59, 61, 26, 2545}
-# Map-specific placements on the E1L1 rooftop near the start (Build xy, angle).
+# E1L1 rooftop placements relative to the player start: `ahead` along the start
+# heading and `left` across it (Build xy units), so they are in Jill's first shot.
 STATIONS = [
-    dict(kind='itembox', dx=-512, dy=-1100, ang=512),
-    dict(kind='typewriter', dx=180, dy=-1100, ang=512),
-    dict(kind='ribbon', dx=-150, dy=-900, ang=0),
+    dict(kind='ribbon', ahead=320, left=0),
+    dict(kind='typewriter', ahead=760, left=0),
+    dict(kind='itembox', ahead=760, left=480),
 ]
 VIEWER_CENTRE = (-80000, -40000)
 VIEWER_HALF = 8192
@@ -85,8 +86,12 @@ def convert_pickups(m, tiles_by_kind):
 
 def place_stations(m, sprites, defines):
     start = m.start; out = []
+    a = start['ang'] * math.pi / 1024
     for st in STATIONS:
-        x, y = start['x'] + st['dx'], start['y'] + st['dy']
+        # Build angles grow clockwise (y points south); "left" is heading - 90 degrees.
+        x = int(start['x'] + st['ahead'] * math.cos(a) + st['left'] * math.sin(a))
+        y = int(start['y'] + st['ahead'] * math.sin(a) - st['left'] * math.cos(a))
+        st['ang'] = (start['ang'] + 1024) & 2047  # facing back toward the start
         sect = m.find_sector(x, y, start['sectnum'])
         if sect < 0:
             raise RuntimeError('Station %s falls outside the map' % st['kind'])
