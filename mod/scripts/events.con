@@ -49,6 +49,15 @@ defstate re_new_game
     setuserdef .fta_on 0
     setuserdef .show_level_text 0
     setuserdef .levelstats 0
+    // developer: start at E1L1's red access switch holding the sword key
+    ife re_debug 5
+    {
+        setarray re_ids[1] ITEM_KEY setarray re_qty[1] 1 set re_used 2
+        setplayer[THISACTOR].posx 17024 setplayer[THISACTOR].posy 55358 setplayer[THISACTOR].posz -33280
+        setplayer[THISACTOR].oposx 17024 setplayer[THISACTOR].oposy 55358 setplayer[THISACTOR].oposz -33280
+        setplayer[THISACTOR].cursectnum 292 setplayer[THISACTOR].ang 512
+        setsprite THISACTOR 17024 55358 -23552 changespritesect THISACTOR 292
+    }
     state re_spawn_jill
     state re_sync_weapon_model
     ife re_title_pending 1
@@ -243,4 +252,10 @@ endevent
 onevent EVENT_PREUPDATEANGLES
     setinput[THISACTOR].q16avel 0
     setinput[THISACTOR].q16horz 0
+endevent
+
+// Damage/pickup palette flashes are set during the world update; clear them
+// before every rendered frame (RE has no screen flashes).
+onevent EVENT_DISPLAYSTART
+    setplayer[THISACTOR].pals_time 0
 endevent

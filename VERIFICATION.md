@@ -16,16 +16,18 @@ Checked on Windows 11 with EDuke32 r10652 (32-bit, OpenGL/Polymost), the GOG cla
 - **Shotgun:** the shotgun is equipped from the status screen. It fires 7 shells on the original fire frames, reloads from shells when empty, and the shell count is displayed.
 - **Herb mixing:** two green herbs mix into MIXED HERBS through the original prompt.
 - **Status button:** the status button closes the screen from any status sub-state.
+- **Sword key:** at the red access switch the key shows "You have used the MANSION KEY." and "This key is useless now. Discard?", and Duke's switch then operates. Tested from a developer start at the switch (debug level 5); the walk there was not tested.
+- **Screen flashes:** Duke's red damage flashes and first-person hands are suppressed.
 - **Overwrite prompt:** re-saving to a used typewriter row asks OK TO OVERWRITE THE DATA?
 
 Developer aids used for these checks:
 
 - `python play.py --debug` writes a trace to the log.
-- Debug levels 2, 3 and 4 give a low-health start, invulnerability, and a shotgun/herb kit. They are set through the `resident-duke-debug.bin` marker and are off in normal play.
+- Debug levels 2, 3, 4 and 5 give a low-health start, invulnerability, a shotgun/herb kit, and a start at the red switch with the sword key. They are set through the `resident-duke-debug.bin` marker and are off in normal play.
 
 Not yet exercised end to end:
 
-- **Sword key:** the sword key on the red access switch.
+- **Sword key route:** walking from the street to the sword key and the switch, including doors and the elevator.
 - **Shell casings:** casing effects, checked only in code; screenshots are too small to judge them.
 - **Fresh-session load:** the death screen's LOAD GAME, without a save from the current session, falls back to EDuke32's load menu. This path is untested.
 - **Music:** switching between the two RE tracks.
