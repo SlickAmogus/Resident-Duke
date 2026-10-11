@@ -40,6 +40,7 @@ ends
 gamevar re_in_bits 0 0
 gamevar re_in_ext 0 0
 gamevar re_menu_edge 0 0
+gamevar re_menu_now 0 0
 gamearray re_pad_remap 16
 defstate re_init_pad_remap
     setarray re_pad_remap[0] 0x1000
@@ -701,6 +702,11 @@ defstate re_move_player
             ifn re_tmp 0 { set re_a RE_SND_DECIDE state re_sound }
             else ifn re_tmp2 0 { set re_a RE_SND_CANCEL state re_sound }
         }
+        // Status button (upstream re_menu event): toggles at any time except
+        // while typing at a typewriter, viewing an item or mid-fade.
+        set re_menu_now 0
+        ifn re_menu_edge 0 ife re_save_state 0 ife re_viewer_item 0 ife re_menu_fade_mode 0 set re_menu_now 1
+        ifn re_menu_now 0 state re_toggle_status
         set re_c 0
         ifn re_status_open 0 set re_c 1 ifn re_box_open 0 set re_c 1 ifg re_prompt_kind 0 set re_c 1 ifg re_menu_fade_mode 0 set re_c 1
         ifn re_c 0 state re_menu_visual_step
@@ -715,8 +721,8 @@ defstate re_move_player
         else ifg re_viewer_item 0 state re_item_view_step
         else ifg re_prompt_kind 0 state re_prompt_step
         else ifn re_box_open 0 state re_box_step
-        else ifn re_status_open 0 state re_status_step
-        else ifn re_menu_edge 0 state re_toggle_status
+        else ifn re_status_open 0 { ife re_menu_now 0 state re_status_step }
+        else ifn re_menu_now 0 nullop
         else
         {
             ife re_behavior 0x0d state re_run_step

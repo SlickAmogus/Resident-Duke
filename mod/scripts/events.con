@@ -27,6 +27,8 @@ defstate re_new_game
     for re_i range 48 { setarray re_box_ids[re_i] 0 setarray re_box_qty[re_i] 0 }
     setarray re_ids[0] ITEM_HANDGUN setarray re_qty[0] 15
     set re_used 1 set re_equipped 0 set re_combine_from -1 set re_examined 0
+    // developer: shotgun test kit
+    ife re_debug 4 { setarray re_ids[1] ITEM_SHOTGUN setarray re_qty[1] 7 setarray re_ids[2] ITEM_SHELLS setarray re_qty[2] 14 setarray re_ids[3] ITEM_HERB setarray re_qty[3] 1 setarray re_ids[4] ITEM_HERB setarray re_qty[4] 1 set re_used 5 set re_health 30 }
     set re_health RE_MAX_HEALTH
     ife re_debug 2 set re_health 5   // developer: low-health start for death tests
     set re_status_open 0 set re_box_open 0 set re_prompt_kind 0 set re_viewer_item 0 set re_menu_fade_mode 0
@@ -96,6 +98,7 @@ onevent EVENT_PREWORLD
                 getactor[re_tmp].picnum re_tmp2 gettiledata[re_tmp2].gameflags re_tmp2
                 and re_tmp2 RE_ENEMY_FLAGS ifn re_tmp2 0 mul re_dmg 2
             }
+            ife re_debug 3 set re_dmg 0   // developer: invulnerable route testing
             ife re_death_stage 0 ifg re_health 0 { sub re_health re_dmg ifl re_health 0 set re_health 0 }
             setactor[re_dmg_spr].htextra -1
         }
@@ -114,6 +117,7 @@ onevent EVENT_PROCESSINPUT
     getplayer[THISACTOR].extra_extra8 re_c shiftr re_c 8
     set re_dmg re_b sub re_dmg re_a add re_dmg re_c
     setplayer[THISACTOR].extra_extra8 0
+    ife re_debug 3 set re_dmg 0
     ifg re_dmg 0 ife re_death_stage 0 ifg re_health 0 { sub re_health re_dmg ifl re_health 0 set re_health 0 }
     set re_a re_health ifl re_a 1 set re_a 1
     setactor[THISACTOR].extra re_a
@@ -139,6 +143,8 @@ onevent EVENT_PROCESSINPUT
     }
     // Pass Duke's "use" through only for interactions Jill delegated to it.
     ifn re_pass_open 0 { setinput[THISACTOR].bits SK_OPEN_BIT set re_pass_open 0 }
+    // No Duke screen flashes (damage, pickups): RE has none.
+    setplayer[THISACTOR].pals_time 0
     state re_update_fall
     // Developer trace (re_debug): once a second.
     ifn re_debug 0

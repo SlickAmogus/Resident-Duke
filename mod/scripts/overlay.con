@@ -40,6 +40,7 @@ defstate re_ov_item
     ife re_ov_id ITEM_HANDGUN set re_tmp 1
     ife re_ov_id ITEM_SHOTGUN set re_tmp 1
     ife re_ov_id ITEM_CLIP set re_tmp 1
+    ife re_ov_id ITEM_SHELLS set re_tmp 1   // RE1 shows shell counts; upstream omitted them
     ife re_ov_id ITEM_RIBBON set re_tmp 1
     ifn re_tmp 0
     {
