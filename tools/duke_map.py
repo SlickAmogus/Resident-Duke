@@ -142,6 +142,9 @@ def generate(grp, tables, tiles):
     duke = sorted(DUKE_TO_RE); tables.add('DUKE_PICKUP_TILE', duke)
     tables.add('DUKE_PICKUP_KIND', [PICKUP_KINDS.index(DUKE_TO_RE[t]) for t in duke])
     tables.add('DUKE_REMOVED_TILE', sorted(DUKE_REMOVED))
+    tables.const('RE_DUKE_PICKUPS', len(duke)); tables.const('RE_DUKE_REMOVED', len(DUKE_REMOVED))
+    # Music: open-sky sectors use the main hall theme, interiors the corridors theme.
+    tables.add('SECTOR_MUSIC', [1 if int(m.sectors[s]['ceilingstat']) & 1 else 0 for s in range(playable_sectors)] + [0])
     tables.const('RE_VIEWER_SECTOR', viewer)
     tables.const('RE_VIEWER_X', VIEWER_CENTRE[0]); tables.const('RE_VIEWER_Y', VIEWER_CENTRE[1])
     tables.const('RE_VIEWER_Z', 0)

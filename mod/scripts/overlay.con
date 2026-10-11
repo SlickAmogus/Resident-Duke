@@ -1,0 +1,480 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Native RE1 PC 320x240 presentation (upstream REHandler.RenderOverlay and
+// friends). Every coordinate below is an original RE pixel; draw tables come
+// from MainMenu.cpp/MenuData.cpp via the generated UI_* arrays.
+
+gamevar re_ov_i 0 0
+gamevar re_ov_n 0 0
+gamevar re_ov_x 0 0
+gamevar re_ov_y 0 0
+gamevar re_ov_id 0 0
+gamevar re_ov_qty 0 0
+gamevar re_ov_preview 0 0
+gamevar re_ov_drawn 0 0
+
+// Full-screen colour wash. in: re_a = strength 0..32767, re_b = 0 black / 1 white.
+defstate re_ov_wash
+    ifg re_a 0
+    {
+        set re_art_alpha 32767 sub re_art_alpha re_a shiftr re_art_alpha 7
+        ifl re_art_alpha 0 set re_art_alpha 0 ifg re_art_alpha 255 set re_art_alpha 255
+        ife re_b 1 set re_art_tile RE_T_WHITE else set re_art_tile RE_T_BLACK
+        state re_fill
+    }
+ends
+
+defstate re_ov_black
+    set re_art_tile RE_T_BLACK set re_art_alpha 0 state re_fill
+ends
+
+// Upstream NativeItem(id, quantity, x, y, preview).
+defstate re_ov_item
+    set re_a re_ov_id state re_item_icon
+    set re_art_tile re_result set re_art_x re_ov_x set re_art_y re_ov_y
+    ifn re_ov_preview 0 { set re_clip_y1 88 set re_clip_y2 118 }
+    state re_art
+    set re_tmp 0
+    ife re_ov_id ITEM_HANDGUN set re_tmp 1
+    ife re_ov_id ITEM_SHOTGUN set re_tmp 1
+    ife re_ov_id ITEM_CLIP set re_tmp 1
+    ife re_ov_id ITEM_RIBBON set re_tmp 1
+    ifn re_tmp 0
+    {
+        set re_ov_drawn 0
+        set re_c re_ov_x ifl re_ov_id 11 add re_c 4 else add re_c 14
+        for re_ov_n range 3
+        {
+            // %03d digits
+            set re_d re_ov_qty
+            ife re_ov_n 0 div re_d 100
+            ife re_ov_n 1 { div re_d 10 mod re_d 10 }
+            ife re_ov_n 2 mod re_d 10
+            set re_tmp 0 ifn re_d 0 set re_tmp 1 ifn re_ov_drawn 0 set re_tmp 1 ife re_ov_n 2 set re_tmp 1
+            ifn re_tmp 0
+            {
+                set re_art_tile RE_T_DIGIT add re_art_tile re_d
+                set re_art_x re_c set re_art_y re_ov_y add re_art_y 20
+                state re_art
+                set re_ov_drawn 1
+            }
+            set re_tmp 0 ifn re_ov_drawn 0 set re_tmp 1 ifg re_ov_id 10 set re_tmp 1
+            ifn re_tmp 0 add re_c 8
+        }
+    }
+    set re_clip_y1 0 set re_clip_y2 240
+ends
+
+// Upstream NativeMessage(): the revealed part of the current source stream.
+defstate re_ov_message
+    set re_ov_x 48 set re_ov_y 186 set re_tmp3 0
+    set re_ov_i re_msg_page_start
+    whilel re_ov_i re_msg_offset
+    {
+        set re_k re_msg_stream[re_ov_i]
+        ife re_k 2 { set re_ov_x 48 add re_ov_y 16 }
+        else ife re_k 5 { add re_ov_i 1 set re_tmp3 0 ife re_msg_stream[re_ov_i] 1 set re_tmp3 1 }
+        else ife re_k 0 add re_ov_x 8
+        else
+        {
+            ifn re_tmp3 0 set re_art_tile RE_T_CODE_GREEN else set re_art_tile RE_T_CODE
+            add re_art_tile re_k
+            set re_art_x re_ov_x set re_art_y re_ov_y state re_art
+            add re_ov_x 8
+        }
+        add re_ov_i 1
+    }
+ends
+
+// Plain RE text at (re_text_x, re_text_y). in: re_a = TEXT offset.
+defstate re_ov_text
+    set re_text_font RE_T_GLYPH state re_draw_text
+ends
+
+defstate re_ov_yes_no
+    set re_text_x 216 set re_text_y 202 set re_a RE_STR_YESNO state re_ov_text
+ends
+
+// Item model window: showview of the black scene into RE (32,16)-(192,136).
+defstate re_ov_showview  // in: re_a..re_d = RE rect x1 y1 x2 y2; camera in re_px.. below
+    set re_clip_x1 re_a set re_clip_y1 re_b set re_clip_x2 re_c set re_clip_y2 re_d
+    state re_ui_clip
+    set re_clip_x1 0 set re_clip_y1 0 set re_clip_x2 320 set re_clip_y2 240
+    // Screen pixels -> showview's 320x200 virtual space.
+    mul re_cx1 320 div re_cx1 xdim
+    mul re_cx2 320 div re_cx2 xdim
+    mul re_cy1 200 div re_cy1 ydim
+    mul re_cy2 200 div re_cy2 ydim
+    ifg re_cx2 319 set re_cx2 319 ifg re_cy2 199 set re_cy2 199
+    showview re_px re_py re_pz re_tmp re_tmp2 re_psect re_cx1 re_cy1 re_cx2 re_cy2
+ends
+
+defstate re_ov_item_window
+    set re_px RE_VIEWER_X sub re_px re_view_dist
+    set re_py RE_VIEWER_Y set re_pz RE_VIEWER_Z set re_psect RE_VIEWER_SECTOR
+    set re_tmp 0 set re_tmp2 100
+    set re_a 32 set re_b 16 set re_c 192 set re_d 136
+    state re_ov_showview
+ends
+
+// ---- Typewriter -----------------------------------------------------------------
+defstate re_ov_typewriter
+    ife re_save_state 7
+    {
+        set re_a re_save_fade shiftr re_a 1 set re_b 0 state re_ov_wash
+    }
+    else
+    {
+        state re_ov_black
+        set re_art_tile RE_T_TYPEWRITER_SCREEN set re_art_x 0 set re_art_y 0 state re_art
+        set re_text_x 124 set re_text_y 13 set re_a RE_STR_SAVE_TITLE state re_ov_text
+        for re_ov_i range 8
+        {
+            ifl re_save_rows[re_ov_i] 0 { set re_a RE_STR_SAVE_EMPTY state re_line_from_text }
+            else
+            {
+                // "JILL \03\  HOLLYWOOD"
+                set re_a RE_STR_SAVE_ROW state re_line_from_text
+                set re_a re_save_rows[re_ov_i] state re_line_append_2digits
+                set re_a RE_STR_SAVE_ROW_END state re_line_append_text
+            }
+            ife re_save_state 6 ife re_save_slot re_ov_i { ifl re_save_reveal re_line_len set re_line_len re_save_reveal }
+            set re_text_x 55 set re_text_y re_ov_i mul re_text_y 16 add re_text_y 45
+            set re_text_font RE_T_GLYPH state re_draw_line
+        }
+        set re_text_x 55 set re_text_y 173 set re_a RE_STR_SAVE_CANCEL state re_ov_text
+        set re_ov_y re_save_slot mul re_ov_y 16 add re_ov_y 45
+        ife re_save_state 3
+        {
+            set re_text_x 49 set re_text_y 193 set re_text_font RE_T_GLYPH_GREEN
+            set re_a RE_STR_SAVE_OVERWRITE state re_draw_text
+            set re_text_x 118 set re_text_y 209 set re_a RE_STR_SAVE_YES_NO state re_ov_text
+            set re_art_tile RE_T_CODE add re_art_tile 2 set re_art_x 47 set re_art_y re_ov_y state re_art
+            ife re_save_blink 0
+            {
+                set re_art_tile RE_T_CODE add re_art_tile 2
+                set re_art_x re_save_choice mul re_art_x 40 add re_art_x 118 set re_art_y 209 state re_art
+            }
+        }
+        else ifn re_save_state 6 ife re_save_blink 0
+        {
+            set re_art_tile RE_T_CODE add re_art_tile 2 set re_art_x 47 set re_art_y re_ov_y state re_art
+        }
+    }
+ends
+
+// ---- Death and title -----------------------------------------------------------------
+// DeathScreen.cpp s_dieScreenPieces/image_update; TitleScreen.cpp positions.
+gamevar re_dc_param 0 0
+gamevar re_dc_phase 0 0
+gamevar re_dc_scale 0 0
+gamevar re_dc_base 0 0
+gamevar re_dc_col 0 0
+gamevar re_dc_next 0 0
+defstate re_ov_death
+    ife re_death_stage 4
+    {
+        state re_ov_black
+        set re_art_tile RE_T_TITLE set re_art_x 0 set re_art_y 0 state re_art
+        // Duke's own logo stands where upstream placed Doom's over the erased "EVIL".
+        set re_art_tile RE_T_DUKE_LOGO set re_art_x 217 set re_art_y 104 set re_art_w 100 state re_art
+        set re_art_tile RE_T_TITLE_OPTION add re_art_tile re_death_title_option
+        set re_art_x 30 set re_art_y 166 ife re_death_title_option 0 set re_art_y 182
+        state re_art
+        set re_a re_death_fade set re_b 0 state re_ov_wash
+    }
+    else
+    {
+        ife re_death_stage 3
+        {
+            state re_ov_black
+            // Corpse scene through the death camera, then the DIED.TIM quadrants.
+            set re_px re_dcam_x set re_py re_dcam_y set re_pz re_dcam_z set re_psect RE_VIEWER_SECTOR
+            set re_tmp re_dcam_ang set re_tmp2 re_dcam_horiz
+            set re_a 0 set re_b 0 set re_c 320 set re_d 240
+            state re_ov_showview
+            for re_ov_i range 4
+            {
+                set re_art_tile RE_T_DEATH_QUAD add re_art_tile re_ov_i
+                set re_art_x 0 set re_tmp re_ov_i and re_tmp 2 ifn re_tmp 0 set re_art_x 160
+                set re_art_y 0 set re_tmp re_ov_i and re_tmp 1 ifn re_tmp 0 set re_art_y 120
+                state re_art
+            }
+            set re_a re_death_rect ifg re_a 255 set re_a 255
+            set re_art_alpha 255 sub re_art_alpha re_a
+            set re_art_tile RE_T_BLACK set re_a 0 set re_b 0 set re_c 320 set re_d 240 state re_rect
+            ifge re_death_machine 2
+            {
+                set re_dc_param re_death_image
+                set re_dc_phase re_dc_param mul re_dc_phase re_dc_param mul re_dc_phase 64
+                set re_dc_scale re_dc_phase shiftr re_dc_scale 4 add re_dc_scale 0x1600 and re_dc_scale 65535
+                set re_dc_base re_dc_scale mul re_dc_base 64 shiftr re_dc_base 13 mul re_dc_base -1
+                set re_dc_col 0
+                set re_dc_next 0
+                set re_clip_x1 32
+                whilel re_dc_next 65536
+                {
+                    set re_tmp re_dc_phase shiftr re_tmp 1 and re_tmp 2047
+                    sin re_tmp2 re_tmp shiftr re_tmp2 2
+                    mul re_tmp2 re_dc_param mul re_tmp2 re_dc_param shiftr re_tmp2 13
+                    add re_tmp2 32768 and re_tmp2 65535 sub re_tmp2 32768
+                    set re_tmp3 re_dc_base sub re_tmp3 re_tmp2 add re_tmp3 32768 and re_tmp3 65535 sub re_tmp3 32768
+                    set re_art_tile re_dc_col and re_art_tile 255 add re_art_tile RE_T_DEATH_COLUMN
+                    set re_art_x re_dc_col add re_art_x 32
+                    set re_art_y re_tmp3 add re_art_y 120
+                    set re_art_zoom re_dc_scale mul re_art_zoom 16
+                    state re_art
+                    set re_dc_next re_dc_phase add re_dc_next 256 set re_dc_phase re_dc_next
+                    add re_dc_col 1
+                }
+                set re_clip_x1 0
+            }
+        }
+        ifge re_death_fade 0
+        {
+            set re_a re_death_fade ifg re_a 32767 set re_a 32767
+            set re_b 0 ife re_death_fade_type 1 set re_b 1
+            state re_ov_wash
+        }
+    }
+ends
+
+// Original three-row storage window and preview frame.
+defstate re_ov_box
+    for re_ov_i range 8
+    {
+        set re_art_tile RE_T_BOXPART add re_art_tile re_ov_i
+        set re_art_x UI_BOX_X[re_ov_i] set re_art_y UI_BOX_Y[re_ov_i] state re_art
+    }
+    set re_ov_n 3 ifn re_box_slide 0 set re_ov_n 4
+    for re_ov_i range re_ov_n
+    {
+        set re_k re_box_selected add re_k 47 add re_k re_ov_i mod re_k 48
+        set re_text_x 42 set re_text_y re_ov_i mul re_text_y 15 add re_text_y 35 sub re_text_y re_box_slide
+        ifn re_box_ids[re_k] 0
+        {
+            set re_a re_box_ids[re_k] state re_item_name
+            set re_a re_result set re_text_font RE_T_GLYPH state re_draw_text
+        }
+        else { set re_a RE_STR_NOTHING set re_text_font RE_T_GLYPH_GRAY state re_draw_text }
+    }
+    set re_ov_preview 1
+    set re_ov_id re_box_ids[re_box_selected] set re_ov_qty re_box_qty[re_box_selected]
+    set re_ov_x 92 set re_ov_y re_box_slide mul re_ov_y -2 add re_ov_y 88 state re_ov_item
+    ifg re_box_slide 0
+    {
+        set re_k re_box_selected add re_k 1 mod re_k 48
+        set re_ov_id re_box_ids[re_k] set re_ov_qty re_box_qty[re_k]
+        set re_ov_x 92 set re_ov_y re_box_slide mul re_ov_y -2 add re_ov_y 118 state re_ov_item
+    }
+    set re_ov_preview 0
+    // The yellow boundary line marks the 48-slot wrap.
+    set re_tmp re_box_selected sub re_tmp 1 and re_tmp 255
+    ifg re_tmp 44
+    {
+        set re_b 49 sub re_b re_box_slide
+        ifg re_box_selected 0 { set re_tmp 48 sub re_tmp re_box_selected mul re_tmp 15 add re_b re_tmp }
+        set re_art_tile RE_T_YELLOW set re_a 42 set re_c 127 set re_d 1 state re_rect
+    }
+    // draw_rect variant 3 forces black; RGB 112 is its fade weight.
+    set re_art_tile RE_T_BLACK set re_art_alpha 143 set re_a 42 set re_b 34 set re_c 126 set re_d 15 state re_rect
+    set re_art_tile RE_T_BLACK set re_art_alpha 143 set re_a 42 set re_b 64 set re_c 126 set re_d 16 state re_rect
+    ifl re_box_state 2
+    {
+        set re_art_tile RE_T_BLACK set re_art_alpha 143 set re_a 42 set re_b 34 set re_c 126 set re_d 46 state re_rect
+        set re_art_tile RE_T_BLACK set re_art_alpha 143 set re_a 92 set re_b 88 set re_c 40 set re_d 30 state re_rect
+    }
+    set re_art_tile RE_T_BLACK set re_art_alpha 143 set re_a 210 set re_b 16 set re_c 94 set re_d 16 state re_rect
+    set re_art_tile RE_T_BLACK set re_art_alpha 143 set re_a 210 set re_b 32 set re_c 47 set re_d 16 state re_rect
+    for re_ov_i range 5
+    {
+        set re_art_tile RE_T_BLACK set re_a UI_MASK_X[re_ov_i] set re_b UI_MASK_Y[re_ov_i]
+        set re_c UI_MASK_W[re_ov_i] set re_d UI_MASK_H[re_ov_i] state re_rect
+    }
+    for re_ov_i range 3
+    {
+        set re_tmp re_box_selected add re_tmp 47 add re_tmp re_ov_i ifl re_box_direction 0 add re_tmp 1 mod re_tmp 48
+        set re_art_tile RE_T_BOX_MARKER set re_art_x 176 set re_art_y re_tmp add re_art_y 33 state re_art
+    }
+ends
+
+// ---- Status screen, item box and prompts -------------------------------------------------
+defstate re_ov_status
+    state re_ov_black
+    ifg re_viewer_item 0 state re_ov_item_window
+    // menu_draw_cursor depth 0x19 is behind the tab/frame records at 20/21.
+    ifl re_selected 0 ife re_box_open 0 ife re_prompt_kind 0 ife re_viewer_item 0
+    {
+        set re_tmp re_selected add re_tmp 4
+        set re_art_tile RE_T_TAB_CURSOR set re_art_x UI_SLOT_X[re_tmp] set re_art_y UI_SLOT_Y[re_tmp] state re_art
+    }
+    for re_ov_i range RE_UI_FRAMES
+    {
+        set re_art_tile RE_T_PART add re_art_tile UI_FRAME_PART[re_ov_i]
+        set re_art_x UI_FRAME_X[re_ov_i] set re_art_y UI_FRAME_Y[re_ov_i]
+        state re_art
+    }
+    for re_ov_i range 4
+    {
+        ife re_ov_i 2 set re_art_tile RE_T_RADIO_DISABLED
+        else { set re_art_tile RE_T_TAB add re_art_tile re_ov_i }
+        set re_art_x UI_SLOT_X[re_ov_i] set re_art_y UI_SLOT_Y[re_ov_i] state re_art
+    }
+    set re_ov_preview 0
+    for re_ov_i range 8
+    {
+        set re_ov_id re_ids[re_ov_i] set re_ov_qty re_qty[re_ov_i]
+        set re_tmp re_ov_i add re_tmp 4 set re_ov_x UI_SLOT_X[re_tmp] set re_ov_y UI_SLOT_Y[re_tmp]
+        state re_ov_item
+    }
+    set re_ov_id 0 set re_ov_qty 0
+    ifge re_equipped 0 { set re_ov_id re_ids[re_equipped] set re_ov_qty re_qty[re_equipped] }
+    set re_ov_x 160 set re_ov_y 146 state re_ov_item
+    set re_art_tile RE_T_PORTRAIT set re_art_x 22 set re_art_y 146 state re_art
+    ife re_heal_sweep 0
+    {
+        // ECG: ((wave*111)+(sweep-22))*2 + (trail==31)
+        set re_tmp re_ecg_old_wave mul re_tmp 111 add re_tmp re_ecg_secondary sub re_tmp 22 mul re_tmp 2 add re_tmp 1
+        set re_art_tile RE_T_ECG add re_art_tile re_tmp set re_art_x 84 set re_art_y 145 state re_art
+        set re_tmp re_ecg_wave mul re_tmp 111 add re_tmp re_ecg_sweep sub re_tmp 22 mul re_tmp 2
+        set re_art_tile RE_T_ECG add re_art_tile re_tmp set re_art_x 84 set re_art_y 145 state re_art
+        // Condition word blinking with the sweep (FINE / CAUTION / DANGER).
+        set re_c 0 set re_d 1 set re_k re_ecg_wave div re_k 4
+        ifl re_k 2
+        {
+            set re_tmp re_ecg_sweep sub re_tmp 53
+            ife re_k 0
+            {
+                set re_c 0
+                ifge re_tmp 3 set re_c 2 ifge re_tmp 7 set re_c 1 ifge re_tmp 33 set re_c 2 ifge re_tmp 37 set re_c 0
+                ifge re_tmp 43 set re_c 2 ifge re_tmp 47 set re_c 1 ifge re_tmp 73 set re_c 2 ifge re_tmp 77 set re_c 0
+            }
+            else
+            {
+                set re_c 0
+                ifge re_tmp 12 set re_c 3 ifge re_tmp 17 set re_c 2 ifge re_tmp 20 set re_c 1 ifge re_tmp 60 set re_c 2
+                ifge re_tmp 63 set re_c 3 ifge re_tmp 68 set re_c 0
+            }
+            set re_d 0 ifn re_c 0 set re_d 1
+            mul re_c 8 ife re_k 0 add re_c 48 else add re_c 24
+        }
+        ifn re_d 0
+        {
+            set re_art_tile re_c div re_art_tile 8 add re_art_tile RE_T_CONDITION
+            set re_art_x 100 set re_art_y 168 state re_art
+        }
+    }
+    else
+    {
+        set re_art_tile re_heal_sweep sub re_art_tile 84 add re_art_tile RE_T_HEAL
+        set re_art_x 84 set re_art_y 146 state re_art
+    }
+    ifn re_box_open 0 state re_ov_box
+    set re_tmp 1
+    ifg re_viewer_item 0 ife re_viewer_mode 1
+    {
+        set re_tmp 0
+        ifn re_viewer_description 0 state re_ov_message
+        else
+        {
+            set re_a re_viewer_item state re_item_name
+            set re_text_x 48 set re_text_y 186 set re_a re_result state re_ov_text
+        }
+    }
+    ifn re_tmp 0 ifg re_prompt_kind 0
+    {
+        set re_tmp 0
+        set re_tmp2 1
+        ifg re_viewer_item 0 { ifl re_viewer_step 64 set re_tmp2 0 ifn re_viewer_exiting 0 set re_tmp2 0 }
+        ifn re_tmp2 0
+        {
+            set re_tmp3 0 ifg re_viewer_item 0 set re_tmp3 1 ifn re_source_prompt 0 set re_tmp3 1
+            ifn re_tmp3 0
+            {
+                state re_ov_message
+                ife re_msg_state 2
+                {
+                    set re_tmp2 re_msg_blink and re_tmp2 24
+                    ifn re_tmp2 0 { set re_art_tile RE_T_CODE add re_art_tile 11 set re_art_x 153 set re_art_y 216 state re_art }
+                }
+                ife re_msg_state 4
+                {
+                    state re_ov_yes_no
+                    set re_tmp2 re_msg_blink and re_tmp2 48
+                    ifn re_tmp2 0 { set re_art_tile RE_T_ARROW set re_art_x 208 ifn re_choice 0 set re_art_x 248 set re_art_y 202 state re_art }
+                }
+            }
+            else
+            {
+                set re_text_x 48 set re_text_y 186 set re_a re_message state re_ov_text
+                ifn re_prompt_kind 2 ifn re_prompt_kind 5
+                {
+                    state re_ov_yes_no
+                    set re_tmp2 re_cursor_blink and re_tmp2 48
+                    ifn re_tmp2 0 { set re_art_tile RE_T_ARROW set re_art_x 208 ifn re_choice 0 set re_art_x 248 set re_art_y 202 state re_art }
+                }
+            }
+        }
+    }
+    ifn re_tmp 0
+    {
+        set re_tmp2 0 ifge re_selected 0 set re_tmp2 1
+        ifn re_box_open 0 ifge re_box_state 2 set re_tmp2 0
+        ifn re_tmp2 0
+        {
+            set re_tmp re_selected add re_tmp 4
+            set re_art_tile RE_T_CURSOR set re_tmp2 re_cursor_blink and re_tmp2 32 ife re_tmp2 0 add re_art_tile 1
+            set re_art_x UI_SLOT_X[re_tmp] set re_art_y UI_SLOT_Y[re_tmp] state re_art
+        }
+        ifn re_action_menu 0
+        {
+            ifn re_action_closing 0 set re_c re_action_delay else { set re_c 8 sub re_c re_action_delay }
+            ifl re_c 1 set re_c 1 ifg re_c 8 set re_c 8
+            for re_ov_i range 3
+            {
+                ife re_ov_i 0 { set re_d 1 ife re_ids[re_selected] ITEM_HANDGUN set re_d 0 }
+                else { set re_d re_ov_i add re_d 1 }
+                // action-<state>-<count>-<part>: ((state*8)+(count-1))*4+part
+                set re_art_tile re_c sub re_art_tile 1 ifn re_action_closing 0 add re_art_tile 8
+                mul re_art_tile 4 add re_art_tile re_d add re_art_tile RE_T_ACTIONWIN
+                ifn re_action_closing 0
+                { set re_art_x re_c mul re_art_x -6 add re_art_x 192 set re_art_y re_c mul re_art_y -3 add re_art_y 81 }
+                else { set re_art_x 144 set re_art_y 57 }
+                set re_tmp re_ov_i mul re_tmp 24 add re_art_y re_tmp
+                state re_art
+            }
+            ife re_action_delay 0
+            {
+                set re_art_tile RE_T_ACTION add re_art_tile 4
+                set re_art_x 144 set re_art_y re_action_option mul re_art_y 24 add re_art_y 57 state re_art
+            }
+        }
+        ifge re_selected 0 ife re_box_open 0
+        {
+            set re_a re_ids[re_selected] state re_item_name
+            set re_text_x 48 set re_text_y 186 set re_a re_result state re_ov_text
+        }
+    }
+    ifg re_menu_fade_mode 0 { set re_a re_menu_fade set re_b 0 state re_ov_wash }
+ends
+
+// Upstream RenderOverlay().
+defstate re_render_overlay
+    state re_ui_begin
+    ifg re_death_stage 0 state re_ov_death
+    else ifg re_startup_cover 0 state re_ov_black
+    else ifg re_save_state 0 state re_ov_typewriter
+    else
+    {
+        set re_tmp 0
+        ifn re_status_open 0 set re_tmp 1 ifn re_box_open 0 set re_tmp 1
+        ifg re_prompt_kind 0 set re_tmp 1 ifg re_viewer_item 0 set re_tmp 1
+        ifn re_tmp 0 state re_ov_status
+        else
+        {
+            ife re_menu_fade_mode 3 { set re_a re_menu_fade set re_b 0 state re_ov_wash }
+            // Long falls (rooftop vent) are presented as a black room transition.
+            ifg re_fall_fade 0 { set re_a re_fall_fade set re_b 0 state re_ov_wash }
+        }
+    }
+    state re_ui_end
+ends

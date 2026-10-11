@@ -1,0 +1,278 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Focused port of the original type-5 casing interpreter (upstream RECasing).
+// RE units and the original 24-byte phase records drive the motion until the
+// final projection into Build space. Effect_CreateBillboard 0x47be30 limits
+// shared effect slots to 64.
+
+// Per-casing state (one value per sprite).
+gamevar re_cs_gun 0 2
+gamevar re_cs_phase 0 2
+gamevar re_cs_age 0 2
+gamevar re_cs_rx 0 2
+gamevar re_cs_ry 0 2
+gamevar re_cs_rz 0 2
+gamevar re_cs_vx 0 2
+gamevar re_cs_vy 0 2
+gamevar re_cs_vz 0 2
+gamevar re_cs_ax 0 2
+gamevar re_cs_ay 0 2
+gamevar re_cs_az 0 2
+gamevar re_cs_frame 0 2
+gamevar re_cs_delay 0 2
+gamevar re_cs_yaw 0 2
+gamevar re_cs_grounded 0 2
+gamevar re_cs_kill 0 2
+gamevar re_cs_facing 0 2
+gamevar re_cs_bx 0 2
+gamevar re_cs_by 0 2
+gamevar re_cs_bz 0 2
+gamevar re_cs_ox 0 2
+gamevar re_cs_oy 0 2
+gamevar re_cs_oz 0 2
+gamevar re_cs_h0 0 2
+gamevar re_cs_h1 0 2
+gamevar re_cs_h3 0 2
+gamevar re_cs_h4 0 2
+gamevar re_cs_h5 0 2
+gamevar re_cs_h6 0 2
+gamevar re_cs_h7 0 2
+gamevar re_cs_owner -1 2
+
+gamevar re_cs_spr 0 0
+gamevar re_cs_gunv 0 0
+gamevar re_cs_base 0 0
+
+// Signed little-endian word from CASING_HEADER. in: re_a = byte index. out: re_result.
+defstate re_cs_word
+    set re_result CASING_HEADER[re_a]
+    set re_tmp re_a add re_tmp 1 set re_tmp CASING_HEADER[re_tmp] shiftl re_tmp 8
+    or re_result re_tmp
+    ifg re_result 32767 sub re_result 65536
+ends
+
+// Upstream LoadPhase(n) for sprite re_cs_spr. in: re_b = phase.
+defstate re_cs_load_phase
+    setactorvar[re_cs_spr].re_cs_phase re_b
+    getactorvar[re_cs_spr].re_cs_gun re_cs_base
+    mul re_cs_base 5 add re_cs_base re_b mul re_cs_base 24
+    set re_tmp re_cs_base set re_tmp2 CASING_HEADER[re_tmp] setactorvar[re_cs_spr].re_cs_h0 re_tmp2
+    add re_tmp 1 set re_tmp2 CASING_HEADER[re_tmp] setactorvar[re_cs_spr].re_cs_h1 re_tmp2
+    add re_tmp 2 set re_tmp2 CASING_HEADER[re_tmp] setactorvar[re_cs_spr].re_cs_h3 re_tmp2
+    add re_tmp 1 set re_tmp2 CASING_HEADER[re_tmp] setactorvar[re_cs_spr].re_cs_h4 re_tmp2
+    add re_tmp 1 set re_tmp2 CASING_HEADER[re_tmp] setactorvar[re_cs_spr].re_cs_h5 re_tmp2
+    add re_tmp 1 set re_tmp2 CASING_HEADER[re_tmp] setactorvar[re_cs_spr].re_cs_h6 re_tmp2
+    add re_tmp 1 set re_tmp2 CASING_HEADER[re_tmp] setactorvar[re_cs_spr].re_cs_h7 re_tmp2
+    set re_a re_cs_base add re_a 8 state re_cs_word setactorvar[re_cs_spr].re_cs_ax re_result
+    set re_a re_cs_base add re_a 10 state re_cs_word setactorvar[re_cs_spr].re_cs_ay re_result
+    set re_a re_cs_base add re_a 12 state re_cs_word setactorvar[re_cs_spr].re_cs_az re_result
+    set re_a re_cs_base add re_a 16 state re_cs_word setactorvar[re_cs_spr].re_cs_vx re_result
+    set re_a re_cs_base add re_a 18 state re_cs_word setactorvar[re_cs_spr].re_cs_vy re_result
+    set re_a re_cs_base add re_a 20 state re_cs_word setactorvar[re_cs_spr].re_cs_vz re_result
+ends
+
+// Upstream Place(): RotMatrixY 0x409aa0 + ApplyMatrixSV 0x409db0 (Q14 trig,
+// Q12 matrix), then the RE -> Build projection about Jill's facing.
+gamevar re_cs_sn 0 0
+gamevar re_cs_cs 0 0
+gamevar re_cs_lx 0 0
+gamevar re_cs_ly 0 0
+gamevar re_cs_lz 0 0
+defstate re_cs_place
+    getactorvar[re_cs_spr].re_cs_yaw re_tmp and re_tmp 4095 shiftr re_tmp 1
+    sin re_cs_sn re_tmp cos re_cs_cs re_tmp
+    ifg re_cs_sn 16383 set re_cs_sn 16383 ifl re_cs_sn -16383 set re_cs_sn -16383
+    ifg re_cs_cs 16383 set re_cs_cs 16383 ifl re_cs_cs -16383 set re_cs_cs -16383
+    mul re_cs_sn 4096 shiftr re_cs_sn 14
+    mul re_cs_cs 4096 shiftr re_cs_cs 14
+    getactorvar[re_cs_spr].re_cs_rx re_a
+    getactorvar[re_cs_spr].re_cs_ry re_b
+    getactorvar[re_cs_spr].re_cs_rz re_c
+    // local = sourceOffset + rotated
+    set re_cs_lx re_cs_cs mul re_cs_lx re_a set re_tmp re_cs_sn mul re_tmp re_c add re_cs_lx re_tmp div re_cs_lx 4096
+    set re_cs_lz re_cs_cs mul re_cs_lz re_c set re_tmp re_cs_sn mul re_tmp re_a sub re_cs_lz re_tmp div re_cs_lz 4096
+    set re_cs_ly re_b
+    getactorvar[re_cs_spr].re_cs_ox re_tmp add re_cs_lx re_tmp
+    getactorvar[re_cs_spr].re_cs_oy re_tmp add re_cs_ly re_tmp
+    getactorvar[re_cs_spr].re_cs_oz re_tmp add re_cs_lz re_tmp
+    // RE forward x, left -z (Doom y), down y -> Build xy (56/225) and z (x16).
+    mul re_cs_lx RE_XY_NUM div re_cs_lx RE_XY_DEN
+    set re_d re_cs_lz mul re_d -1 mul re_d RE_XY_NUM div re_d RE_XY_DEN
+    getactorvar[re_cs_spr].re_cs_facing re_tmp
+    cos re_a re_tmp sin re_b re_tmp
+    // Build: dx = cos*x + sin*y_left, dy = sin*x - cos*y_left (y axis points south).
+    set re_px re_a mul re_px re_cs_lx set re_tmp re_b mul re_tmp re_d add re_px re_tmp shiftr re_px 14
+    set re_py re_b mul re_py re_cs_lx set re_tmp re_a mul re_tmp re_d sub re_py re_tmp shiftr re_py 14
+    getactorvar[re_cs_spr].re_cs_bx re_tmp add re_px re_tmp
+    getactorvar[re_cs_spr].re_cs_by re_tmp add re_py re_tmp
+    getactorvar[re_cs_spr].re_cs_bz re_pz
+    getactorvar[re_cs_spr].re_cs_grounded re_tmp
+    ife re_tmp 0
+    {
+        set re_tmp re_cs_ly mul re_tmp RE_XY_NUM mul re_tmp 16 div re_tmp RE_XY_DEN
+        add re_pz re_tmp
+    }
+    else
+    {
+        getactorvar[re_cs_spr].re_cs_owner re_tmp
+        ifge re_tmp 0 getactor[re_tmp].z re_pz
+    }
+    setsprite re_cs_spr re_px re_py re_pz
+ends
+
+// Upstream ShowFrame(): frame tile and original scale byte.
+defstate re_cs_show_frame
+    getactorvar[re_cs_spr].re_cs_frame re_tmp mul re_tmp 4
+    set re_tmp CASING_FRAME[re_tmp] add re_tmp RE_T_CASING
+    setactor[re_cs_spr].picnum re_tmp
+    getactorvar[re_cs_spr].re_cs_h3 re_tmp
+    setactor[re_cs_spr].xrepeat re_tmp setactor[re_cs_spr].yrepeat re_tmp
+ends
+
+// Play3DSnd bank1 slot10 uses the currently loaded weapon SFX bank.
+defstate re_cs_impact_sound
+    getactorvar[re_cs_spr].re_cs_h7 re_tmp
+    set re_tmp2 re_visible_weapon sub re_tmp2 2
+    ife re_tmp re_tmp2
+    {
+        ife re_visible_weapon ITEM_SHOTGUN sound RE_SND_SHELL_LAND else sound RE_SND_CASE_LAND
+    }
+ends
+
+// Upstream StepSource(): one 30 Hz source tick.
+gamevar re_cs_dead 0 0
+defstate re_cs_step
+    set re_cs_dead 0
+    getactorvar[re_cs_spr].re_cs_age re_tmp add re_tmp 1 setactorvar[re_cs_spr].re_cs_age re_tmp
+    getactorvar[re_cs_spr].re_cs_kill re_tmp
+    ifn re_tmp 0 set re_cs_dead 1
+    else
+    {
+        // Behaviour 8 probes horizontal obstacle bounds (RDT); Build sector lookup here.
+        getactorvar[re_cs_spr].re_cs_h0 re_tmp
+        ife re_tmp 8
+        {
+            getactor[re_cs_spr].x re_a getactor[re_cs_spr].y re_b getactor[re_cs_spr].sectnum re_c
+            updatesector re_a re_b re_c
+            ifl re_c 0
+            {
+                setactorvar[re_cs_spr].re_cs_h0 1 setactorvar[re_cs_spr].re_cs_h4 2 setactorvar[re_cs_spr].re_cs_h6 1
+                getactorvar[re_cs_spr].re_cs_vx re_tmp mul re_tmp -1 setactorvar[re_cs_spr].re_cs_vx re_tmp
+                state re_cs_impact_sound
+            }
+        }
+        // Translate before integrating acceleration (EffectActor_UpdateAndRender).
+        state re_cs_place
+        getactorvar[re_cs_spr].re_cs_vx re_a getactorvar[re_cs_spr].re_cs_ax re_tmp add re_a re_tmp setactorvar[re_cs_spr].re_cs_vx re_a
+        getactorvar[re_cs_spr].re_cs_vy re_b getactorvar[re_cs_spr].re_cs_ay re_tmp add re_b re_tmp setactorvar[re_cs_spr].re_cs_vy re_b
+        getactorvar[re_cs_spr].re_cs_vz re_c getactorvar[re_cs_spr].re_cs_az re_tmp add re_c re_tmp setactorvar[re_cs_spr].re_cs_vz re_c
+        getactorvar[re_cs_spr].re_cs_rx re_tmp add re_tmp re_a setactorvar[re_cs_spr].re_cs_rx re_tmp
+        getactorvar[re_cs_spr].re_cs_ry re_tmp add re_tmp re_b setactorvar[re_cs_spr].re_cs_ry re_tmp
+        getactorvar[re_cs_spr].re_cs_rz re_tmp add re_tmp re_c setactorvar[re_cs_spr].re_cs_rz re_tmp
+        // Behaviour 10 uses Jill's foot plane, not a generic bounce. sourceY is RE y-down.
+        getactorvar[re_cs_spr].re_cs_owner re_tmp
+        getactorvar[re_cs_spr].re_cs_bz re_d
+        ifge re_tmp 0 getactor[re_tmp].z re_d
+        getactor[re_cs_spr].z re_tmp sub re_tmp re_d mul re_tmp RE_XY_DEN div re_tmp RE_XY_NUM div re_tmp 16
+        add re_tmp re_b    // sourceY + vy
+        getactorvar[re_cs_spr].re_cs_h1 re_tmp2
+        ife re_tmp2 10 ifg re_tmp 0
+        {
+            getactorvar[re_cs_spr].re_cs_h5 re_tmp3 sub re_tmp3 1 ifl re_tmp3 0 set re_tmp3 0
+            rand re_k re_tmp3
+            getactorvar[re_cs_spr].re_cs_phase re_c add re_c 1 add re_c re_k
+            ifg re_c 4 set re_cs_dead 1
+            else
+            {
+                setactorvar[re_cs_spr].re_cs_phase re_c
+                getactorvar[re_cs_spr].re_cs_gun re_cs_base mul re_cs_base 5 add re_cs_base re_c mul re_cs_base 24
+                set re_tmp re_cs_base add re_tmp 1 set re_tmp CASING_HEADER[re_tmp] setactorvar[re_cs_spr].re_cs_h1 re_tmp
+                // Upstream reads vx unsigned (quirk preserved), vy/vz signed.
+                set re_tmp re_cs_base add re_tmp 16 set re_tmp2 CASING_HEADER[re_tmp]
+                add re_tmp 1 set re_tmp CASING_HEADER[re_tmp] shiftl re_tmp 8 or re_tmp re_tmp2
+                setactorvar[re_cs_spr].re_cs_vx re_tmp
+                set re_a re_cs_base add re_a 18 state re_cs_word setactorvar[re_cs_spr].re_cs_vy re_result
+                set re_a re_cs_base add re_a 20 state re_cs_word
+                set re_tmp re_k mul re_tmp 10 add re_result re_tmp setactorvar[re_cs_spr].re_cs_vz re_result
+                set re_tmp re_cs_base add re_tmp 22 set re_tmp2 CASING_HEADER[re_tmp]
+                add re_tmp 1 set re_tmp CASING_HEADER[re_tmp] shiftl re_tmp 8 or re_tmp re_tmp2
+                getactorvar[re_cs_spr].re_cs_yaw re_tmp2 add re_tmp2 re_tmp setactorvar[re_cs_spr].re_cs_yaw re_tmp2
+                setactorvar[re_cs_spr].re_cs_grounded 1
+                state re_cs_impact_sound
+                getactorvar[re_cs_spr].re_cs_h6 re_tmp
+                ifn re_tmp 0 { getactorvar[re_cs_spr].re_cs_vx re_tmp mul re_tmp -1 setactorvar[re_cs_spr].re_cs_vx re_tmp }
+                // rotY = -sourceOffset.Y + (spawnBase.Z - plane) in RE units (y down).
+                getactorvar[re_cs_spr].re_cs_oy re_tmp mul re_tmp -1
+                set re_tmp2 re_d getactorvar[re_cs_spr].re_cs_bz re_tmp3 sub re_tmp2 re_tmp3
+                mul re_tmp2 RE_XY_DEN div re_tmp2 RE_XY_NUM div re_tmp2 16 add re_tmp re_tmp2
+                setactorvar[re_cs_spr].re_cs_ry re_tmp
+            }
+        }
+        else ife re_tmp2 9 ifg re_tmp 0
+        {
+            setactorvar[re_cs_spr].re_cs_kill 1 setactorvar[re_cs_spr].re_cs_grounded 1 setactorvar[re_cs_spr].re_cs_h1 0
+        }
+        // Effect_AnimateSprite: byte0 selects UV, byte1 delay; FF jumps in the frame table.
+        ife re_cs_dead 0
+        {
+            getactorvar[re_cs_spr].re_cs_delay re_tmp
+            ife re_tmp 0
+            {
+                getactorvar[re_cs_spr].re_cs_frame re_a add re_a 1
+                set re_b re_a mul re_b 4
+                set re_c CASING_FRAME[re_b] add re_b 1 set re_d CASING_FRAME[re_b]
+                ife re_c 0 ife re_d 0 set re_cs_dead 1
+                ife re_d 255 set re_a re_c
+                setactorvar[re_cs_spr].re_cs_frame re_a
+                set re_b re_a mul re_b 4 add re_b 1 set re_tmp CASING_FRAME[re_b]
+            }
+            sub re_tmp 1 setactorvar[re_cs_spr].re_cs_delay re_tmp
+            state re_cs_show_frame
+        }
+    }
+ends
+
+// Upstream RECasing.Emit(): spawn from Jill at the RE fire frame.
+defstate re_casing_emit
+    set re_c 0
+    for re_k allsprites
+    {
+        getactor[re_k].picnum re_tmp
+        set re_tmp2 re_tmp sub re_tmp2 RE_T_CASING
+        ifge re_tmp2 0 ifl re_tmp2 16 add re_c 1
+        set re_tmp2 re_tmp sub re_tmp2 RE_T_GLINT
+        ifge re_tmp2 0 ifl re_tmp2 10 add re_c 1
+    }
+    ifl re_c 64
+    {
+        espawn RE_T_CASING
+        set re_cs_spr RETURN
+        setactor[re_cs_spr].cstat 128     // centre-aligned billboard
+        setactor[re_cs_spr].shade -8
+        setactorvar[re_cs_spr].re_cs_owner THISACTOR
+        set re_cs_gunv 0 ife re_visible_weapon ITEM_SHOTGUN set re_cs_gunv 1
+        setactorvar[re_cs_spr].re_cs_gun re_cs_gunv
+        getplayer[THISACTOR].ang re_tmp2 setactorvar[re_cs_spr].re_cs_facing re_tmp2
+        getactor[THISACTOR].x re_tmp2 setactorvar[re_cs_spr].re_cs_bx re_tmp2
+        getactor[THISACTOR].y re_tmp2 setactorvar[re_cs_spr].re_cs_by re_tmp2
+        getactor[THISACTOR].z re_tmp2 setactorvar[re_cs_spr].re_cs_bz re_tmp2
+        // yaw = ((gun-8)-1) & 0x555; body offsets (370,-2570,-220) / (360,-2050,-440).
+        set re_tmp2 re_cs_gunv sub re_tmp2 9 and re_tmp2 0x555 setactorvar[re_cs_spr].re_cs_yaw re_tmp2
+        ife re_cs_gunv 1
+        { setactorvar[re_cs_spr].re_cs_ox 360 setactorvar[re_cs_spr].re_cs_oy -2050 setactorvar[re_cs_spr].re_cs_oz -440 }
+        else
+        { setactorvar[re_cs_spr].re_cs_ox 370 setactorvar[re_cs_spr].re_cs_oy -2570 setactorvar[re_cs_spr].re_cs_oz -220 }
+        set re_b 0 state re_cs_load_phase
+        // autoaim_fire stores weaponIdx in animHeader[3] (header byte 7).
+        setactorvar[re_cs_spr].re_cs_h7 re_cs_gunv
+        getactorvar[re_cs_spr].re_cs_h4 re_tmp2 setactorvar[re_cs_spr].re_cs_frame re_tmp2
+        mul re_tmp2 4 add re_tmp2 1 set re_tmp2 CASING_FRAME[re_tmp2] setactorvar[re_cs_spr].re_cs_delay re_tmp2
+        randvar re_b 1 add re_b 1
+        state re_cs_load_phase
+        setactorvar[re_cs_spr].re_cs_phase 2
+        setactorvar[re_cs_spr].re_cs_h7 re_cs_gunv
+        setactorvar[re_cs_spr].re_actor_ready 1
+        state re_cs_place
+        state re_cs_show_frame
+        state re_cs_step
+    }
+ends

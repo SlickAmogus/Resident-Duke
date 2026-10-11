@@ -53,6 +53,7 @@ gamevar re_art_x 0 0
 gamevar re_art_y 0 0
 gamevar re_art_w 0 0       // destination width in RE pixels; 0 = native
 gamevar re_art_alpha 0 0   // 0 opaque .. 255 invisible
+gamevar re_art_zoom 0 0    // explicit 16.16 zoom (overrides re_art_w)
 gamevar re_clip_x1 0 0
 gamevar re_clip_y1 0 0
 gamevar re_clip_x2 320 0
@@ -103,12 +104,13 @@ defstate re_art
         gettiledata[re_art_tile].xsize re_tmp
         ifg re_tmp 0 { set re_art_z re_art_w shiftl re_art_z 16 div re_art_z re_tmp }
     }
+    ifg re_art_zoom 0 set re_art_z re_art_zoom
     set re_art_sx re_art_x
     set re_art_sy re_art_y sub re_art_sy 20
     state re_ui_clip
     // 8 = no viewport clip (full screen), 16 = top-left origin.
     rotatespritea re_art_sx re_art_sy re_art_z 0 re_art_tile 0 0 24 re_art_alpha re_cx1 re_cy1 re_cx2 re_cy2
-    set re_art_w 0 set re_art_alpha 0
+    set re_art_w 0 set re_art_alpha 0 set re_art_zoom 0
 ends
 
 gamevar re_rect_x1 0 0

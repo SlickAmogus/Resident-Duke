@@ -7,20 +7,21 @@
 
 include GAME.CON
 
-include gen/data.con      // generated: tile numbers, table arrays, map constants
-include scripts/defs.con      // constants and state variables
-include gen/tables.con    // generated: re_load_tables
-include scripts/util.con      // tables, text, items, sounds, UI drawing primitives
-include scripts/world.con     // world freeze, cameras, Duke HUD suppression
-include scripts/jill.con      // animation banks and the visible Jill model
-include scripts/inventory.con // carried items, item box transfers, herbs
-include scripts/messages.con  // original STR message streams and prompts
-include scripts/viewer.con    // item model viewer and pickups
-include scripts/status.con    // status screen and item box state machines
-include scripts/save.con      // typewriter saves
-include scripts/death.con     // death sequence and title screen
-include scripts/casing.con    // spent casing effect
-include scripts/control.con   // tank movement, gun behaviours, interaction
-include scripts/actors.con    // pickups, glints, stations
-include scripts/overlay.con   // native 320x240 RE UI rendering
-include scripts/events.con    // engine event wiring
+include gen/data.con           // generated: tile numbers, table arrays, map constants
+include scripts/defs.con       // constants and state variables
+include gen/tables.con         // generated: re_load_tables
+include scripts/util.con       // tables, text, sounds, UI drawing primitives
+include scripts/world.con      // world freeze, fixed cameras, long falls
+include scripts/jill.con       // animation banks and the visible Jill model
+include scripts/inventory.con  // carried items, item box transfers, herbs
+include scripts/messages.con   // original STR message streams and prompts
+include scripts/viewer.con     // item model viewer scene
+include scripts/save.con       // typewriter saves, interaction checks
+include scripts/status.con     // status screen, prompts and item box
+include scripts/death.con      // death sequence and title screen
+include scripts/casing.con     // spent casing effect
+include scripts/control.con    // tank movement, gun behaviours, interaction
+include scripts/actors.con     // pickups, glints and casings as actors
+include gen/actors.con         // generated: actor stubs for every effect frame tile
+include scripts/overlay.con    // native 320x240 RE UI rendering
+include scripts/events.con     // engine event wiring

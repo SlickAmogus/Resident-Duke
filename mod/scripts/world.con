@@ -145,3 +145,46 @@ defstate re_update_fall
     }
     ife re_falling 0 { ifg re_fall_fade 0 { sub re_fall_fade 0x1800 ifl re_fall_fade 0 set re_fall_fade 0 } }
 ends
+
+// ---- Movement -------------------------------------------------------------------
+// Upstream TranslateRE(distance, backwards): RE units along a heading. Build's
+// clipmove slides along walls, replacing upstream's axis-separated retry.
+// in: re_a = RE distance, re_b = Build angle.
+gamevar re_mv_x 0 0
+gamevar re_mv_y 0 0
+gamevar re_mv_z 0 0
+gamevar re_mv_sect 0 0
+gamevar re_mv_xv 0 0
+gamevar re_mv_yv 0 0
+gamevar re_mv_dist 0 0
+gamevar re_mv_step 0 0
+defstate re_translate_dir
+    getplayer[THISACTOR].posx re_mv_x
+    getplayer[THISACTOR].posy re_mv_y
+    getplayer[THISACTOR].posz re_mv_z
+    getplayer[THISACTOR].cursectnum re_mv_sect
+    getplayer[THISACTOR].clipdist re_mv_dist
+    getplayer[THISACTOR].autostep re_mv_step
+    cos re_mv_xv re_b
+    sin re_mv_yv re_b
+    mul re_mv_xv re_a mul re_mv_xv RE_XY_NUM div re_mv_xv RE_XY_DEN
+    mul re_mv_yv re_a mul re_mv_yv RE_XY_NUM div re_mv_yv RE_XY_DEN
+    ifge re_mv_sect 0
+    {
+        clipmove re_tmp re_mv_x re_mv_y re_mv_z re_mv_sect re_mv_xv re_mv_yv re_mv_dist 1024 re_mv_step CLIPMASK0
+        ifge re_mv_sect 0
+        {
+            setplayer[THISACTOR].posx re_mv_x
+            setplayer[THISACTOR].posy re_mv_y
+            setplayer[THISACTOR].cursectnum re_mv_sect
+        }
+    }
+ends
+
+// Upstream RotateRE(increment): 4096-unit RE turn steps; Build uses 2048.
+defstate re_rotate  // in: re_a = RE increment (positive turns right)
+    getplayer[THISACTOR].ang re_tmp
+    set re_tmp2 re_a shiftr re_tmp2 1
+    add re_tmp re_tmp2 and re_tmp 2047
+    setplayer[THISACTOR].ang re_tmp
+ends

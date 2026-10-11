@@ -85,7 +85,8 @@ ends
 // MainMenu.cpp menu_itembox_interaction 0x004941f0, states 1 and 2.
 defstate re_box_step
     set re_tmp re_pressed and re_tmp 0x8000
-    ifl re_box_state 3 ifn re_tmp 0
+    ifge re_box_state 3 set re_tmp 0
+    ifn re_tmp 0
     {
         ife re_box_state 2 set re_box_state 1 else state re_close_box
     }
@@ -270,7 +271,9 @@ defstate re_combine_selected
             set re_a re_ids[re_d] set re_b re_ids[re_c] state re_recipe
             set re_k re_result
             set re_a re_ids[re_d] state re_is_herb
-            ifge re_k 0 ife re_result 1 ifn re_ids[re_d] ITEM_HERB_GGG
+            ifl re_k 0 set re_result 0
+            ife re_ids[re_d] ITEM_HERB_GGG set re_result 0
+            ife re_result 1
             {
                 set re_prompt_a re_d set re_prompt_b re_c
                 set re_a 3 set re_b -1 state re_begin_prompt
@@ -284,7 +287,8 @@ defstate re_combine_selected
                 ife re_tmp ITEM_SHOTGUN ife re_tmp2 ITEM_SHELLS { set re_i re_c set re_j re_d }
                 ife re_tmp2 ITEM_HANDGUN ife re_tmp ITEM_CLIP { set re_i re_d set re_j re_c }
                 ife re_tmp2 ITEM_SHOTGUN ife re_tmp ITEM_SHELLS { set re_i re_d set re_j re_c }
-                ifge re_k 0 ifge re_i 0
+                ifl re_k 0 set re_i -1
+                ifge re_i 0
                 {
                     set re_a 15 ife re_ids[re_i] ITEM_SHOTGUN set re_a 7
                     sub re_a re_qty[re_i]
@@ -298,7 +302,8 @@ defstate re_combine_selected
                     // Same ammo type: merge stacks up to 250.
                     set re_tmp 0
                     ife re_ids[re_c] re_ids[re_d] { ife re_ids[re_c] ITEM_CLIP set re_tmp 1 ife re_ids[re_c] ITEM_SHELLS set re_tmp 1 }
-                    ifge re_k 0 ifn re_tmp 0
+                    ifl re_k 0 set re_tmp 0
+                    ifn re_tmp 0
                     {
                         set re_a 250 sub re_a re_qty[re_d]
                         ifg re_a re_qty[re_c] set re_a re_qty[re_c]

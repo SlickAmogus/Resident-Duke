@@ -1,0 +1,176 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// RE1 PC PlayerAnimations.cpp 0x459be0; GameLoop.cpp death countdown;
+// DeathScreen.cpp 0x443090/0x443550. Duke's own death handling never runs:
+// EVENT_INCURDAMAGE keeps the Duke player alive and starts this sequence.
+
+define RE_DEATH_TITLE_NEW 1
+define RE_DEATH_TITLE_LOAD 2
+
+// Death scene camera (upstream: eye (5000,-7000,0) / look (0,-1000,0) relative
+// to the corpse, focal 192 on a 320-wide window; Build focal 160 => x 5/6).
+gamevar re_dcam_x 0 0
+gamevar re_dcam_y 0 0
+gamevar re_dcam_z 0 0
+gamevar re_dcam_ang 1024 0
+gamevar re_dcam_horiz 100 0
+defstate re_setup_death_camera
+    // Corpse origin is the viewer sector centre; RE y-up offsets become Build -z.
+    set re_tmp 5000 mul re_tmp RE_XY_NUM div re_tmp RE_XY_DEN          // eye forward (xy)
+    set re_tmp2 7000 mul re_tmp2 RE_XY_NUM mul re_tmp2 16 div re_tmp2 RE_XY_DEN  // eye height (z)
+    set re_tmp3 1000 mul re_tmp3 RE_XY_NUM mul re_tmp3 16 div re_tmp3 RE_XY_DEN  // look height (z)
+    // Shorten the eye-to-target vector by the focal ratio 5/6.
+    set re_a re_tmp mul re_a 5 div re_a 6
+    set re_b re_tmp2 sub re_b re_tmp3 mul re_b 5 div re_b 6 add re_b re_tmp3
+    set re_dcam_x RE_VIEWER_X add re_dcam_x re_a
+    set re_dcam_y RE_VIEWER_Y
+    set re_dcam_z RE_VIEWER_Z sub re_dcam_z re_b
+    set re_dcam_ang 1024
+    // horiz = 100 - 128 * tan(pitch down); dz in xy units = (eye-target height)/16.
+    set re_c re_b sub re_c re_tmp3 mul re_c 128 div re_c 16 div re_c re_a
+    set re_dcam_horiz 100 sub re_dcam_horiz re_c
+ends
+
+// Original KAGE.TIM footprint as a floor decal that grows under the body.
+defstate re_update_death_blood
+    ifge re_death_blood 0
+    {
+        // world width = halfW*2 RE units; xrepeat = width_xy*4 / tile width.
+        gettiledata[RE_T_BLOOD].xsize re_tmp ifle re_tmp 0 set re_tmp 1
+        set re_a re_death_blood_w mul re_a 2 mul re_a RE_XY_NUM mul re_a 4 div re_a RE_XY_DEN div re_a re_tmp
+        gettiledata[RE_T_BLOOD].ysize re_tmp ifle re_tmp 0 set re_tmp 1
+        set re_b re_death_blood_h mul re_b 2 mul re_b RE_XY_NUM mul re_b 4 div re_b RE_XY_DEN div re_b re_tmp
+        ifg re_a 255 set re_a 255 ifg re_b 255 set re_b 255
+        setactor[re_death_blood].xrepeat re_a
+        setactor[re_death_blood].yrepeat re_b
+        getplayer[THISACTOR].ang re_tmp setactor[re_death_blood].ang re_tmp
+    }
+ends
+
+// Upstream DeathTitle().
+defstate re_death_title
+    set re_death_stage 4 set re_death_fade 0x7fff set re_death_title_option 0
+    stopallmusic
+ends
+
+// Upstream DeathDisplayStep(): two display steps per source control tick.
+defstate re_death_display_step
+    ifge re_death_fade 0
+    {
+        ife re_death_fade_type 1 sub re_death_fade 0x180 else add re_death_fade 0x180
+        ifge re_death_fade 0x8000 set re_death_fade -1
+        ifl re_death_fade 0 set re_death_fade -1
+    }
+    xor re_death_step_tick 1
+    ifn re_death_step_tick 0
+    {
+        ife re_death_machine 1 { ifl re_death_fade 0 set re_death_machine 2 }
+        else ife re_death_machine 2
+        {
+            ifl re_death_rect 255 add re_death_rect 3
+            ifg re_death_rect 0x3f sub re_death_image 1
+            ifl re_death_image 4 { set re_death_machine 3 set re_death_hold 0 }
+        }
+        else ife re_death_machine 3 { add re_death_hold 1 ifg re_death_hold 0x30 set re_death_machine 4 }
+        else ife re_death_machine 4
+        { set re_death_fade_type 2 set re_death_fade 0 set re_death_image 4 set re_death_machine 5 }
+        else ife re_death_machine 5 { add re_death_image 1 ifl re_death_fade 0 state re_death_title }
+    }
+    ife re_death_stage 3
+    {
+        add re_death_angle 4 and re_death_angle 2047
+        set re_tmp re_pad and re_tmp 0x4000
+        ifn re_tmp 0 state re_death_title
+    }
+ends
+
+// Corpse in the black viewer scene (death stage 3).
+defstate re_pose_in_death_scene
+    set re_a RE_VIEWER_X set re_b RE_VIEWER_Y set re_c RE_VIEWER_Z set re_d RE_VIEWER_SECTOR
+    set re_tmp3 re_death_angle
+    state re_apply_pose
+ends
+
+// Upstream DeathStep().
+defstate re_death_step
+    ife re_death_stage 0
+    {
+        set re_death_stage 1 set re_death_countdown 90 set re_death_fall 1
+        set re_status_open 0 set re_box_open 0 set re_prompt_kind 0 set re_action_menu 0 set re_menu_fade_mode 0
+        set re_save_state 0 set re_save_pending 0 set re_pending_pickup -1
+        ifg re_viewer_item 0 state re_stop_item_view
+        state re_update_freeze
+        set re_aim_lock 0 set re_aim_target -1
+        set re_a 4 state re_new_motion
+        set re_a RE_SND_DEATH state re_sound
+        getplayer[THISACTOR].ang re_death_angle
+    }
+    ife re_death_stage 1
+    {
+        ife re_death_fall 1
+        {
+            ife re_animframe 0x19 ifle re_anim_timing 1 { set re_a RE_SND_BODY_THUD state re_sound }
+            set re_jm_body 1 state re_joint_move
+            ifn re_result 0 set re_death_fall 2
+            // Slide sideways 15 RE units per tick (angle-90 in RE/Doom = +512 in Build).
+            getplayer[THISACTOR].ang re_tmp add re_tmp 512 and re_tmp 2047
+            set re_a 15 set re_b re_tmp state re_translate_dir
+        }
+        ife re_death_fall 2
+        {
+            espawn RE_T_BLOOD
+            set re_death_blood RETURN
+            changespritestat re_death_blood 0
+            setactor[re_death_blood].cstat 32    // floor-aligned
+            getactor[THISACTOR].z re_tmp sub re_tmp 4
+            setactor[re_death_blood].z re_tmp
+            setactor[re_death_blood].shade 0
+            set re_death_blood_w 400 set re_death_blood_h 600 set re_death_blood_timer 0xb4 set re_death_fall 3
+        }
+        else ife re_death_fall 3
+        {
+            ifg re_death_blood_timer 0x20 { add re_death_blood_w 16 add re_death_blood_h 16 sub re_death_blood_timer 1 }
+        }
+        state re_update_death_blood
+        state re_pose_at_player
+        sub re_death_countdown 1
+        ife re_death_countdown 0 { set re_death_stage 2 set re_death_fade 0 set re_death_fade_type 1 }
+    }
+    else ife re_death_stage 2
+    {
+        add re_death_fade 0x100
+        ifge re_death_fade 0x8000
+        {
+            ifge re_death_blood 0 { setactor[re_death_blood].cstat 32768 set re_death_blood -1 }
+            set re_death_stage 3 set re_death_machine 1 set re_death_image 0x3b set re_death_rect 0
+            set re_death_fade 0x7fff set re_death_fade_type 1 set re_death_sound_fade 43
+            state re_update_freeze
+            state re_setup_death_camera
+        }
+    }
+    else ife re_death_stage 3
+    {
+        state re_death_display_step
+        ife re_death_stage 3 state re_death_display_step
+        state re_pose_in_death_scene
+    }
+    else ife re_death_stage 4
+    {
+        ifg re_death_fade 0 { sub re_death_fade 0x400 ifl re_death_fade 0 set re_death_fade 0 }
+        else ife re_death_title_option 0
+        {
+            set re_tmp re_pressed and re_tmp 0xc080
+            ifn re_tmp 0 { set re_death_title_option 1 set re_a RE_SND_TYPE_B state re_sound }
+        }
+        else
+        {
+            set re_tmp re_raw_edge and re_tmp 0x5000
+            ifn re_tmp 0 { ife re_death_title_option 1 set re_death_title_option 2 else set re_death_title_option 1 }
+            set re_tmp re_pressed and re_tmp 0x4000
+            ifn re_tmp 0
+            {
+                set re_a RE_SND_TITLE state re_sound
+                set re_death_request re_death_title_option
+            }
+        }
+    }
+ends

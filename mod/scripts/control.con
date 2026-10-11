@@ -1,0 +1,665 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Tank movement, gun behaviours and interaction: upstream JillPlayer's
+// MovePlayer/WalkStep/RunStep/GunStep/Interact. One RE source tick (33 ms)
+// per Duke game tic (33.3 ms); upstream needed a 35 Hz rational scheduler.
+
+define RE_ENEMY_FLAGS 262176          // SFLAG_BADGUY | SFLAG_HARDCODED_BADGUY
+define RE_AIM_RANGE 16384             // 2048 Doom units
+define RE_NEAR_ENEMY 1991             // 8000 RE units
+define RE_PICKUP_RANGE 384            // 48 Doom units
+
+// in: re_a = sprite. out: re_result = 1 for a living Duke enemy.
+defstate re_is_enemy
+    set re_result 0
+    ifge re_a 0
+    {
+        getactor[re_a].statnum re_tmp
+        ife re_tmp 1
+        {
+            getactor[re_a].picnum re_tmp
+            gettiledata[re_tmp].gameflags re_tmp2
+            and re_tmp2 RE_ENEMY_FLAGS
+            getactor[re_a].extra re_tmp
+            ifn re_tmp2 0 ifg re_tmp 0 set re_result 1
+        }
+    }
+ends
+
+// in: re_a = sprite. out: re_result = 1 if Jill can see it (eye to its middle).
+defstate re_jill_sees
+    getplayer[THISACTOR].posx re_b getplayer[THISACTOR].posy re_c getplayer[THISACTOR].posz re_d
+    getplayer[THISACTOR].cursectnum re_tmp
+    getactor[re_a].x re_px getactor[re_a].y re_py getactor[re_a].z re_pz getactor[re_a].sectnum re_psect
+    sub re_pz 6144
+    cansee re_b re_c re_d re_tmp re_px re_py re_pz re_psect re_result
+ends
+
+// ---- Input --------------------------------------------------------------------
+// Builds upstream's raw pad from Duke's input, then PlayerPad_Update 0x0044e000
+// with config 0 table 0x004bf2a0.
+gamevar re_in_bits 0 0
+gamevar re_in_ext 0 0
+gamevar re_menu_edge 0 0
+gamearray re_pad_remap 16
+defstate re_init_pad_remap
+    setarray re_pad_remap[0] 0x1000
+    setarray re_pad_remap[1] 0x2000
+    setarray re_pad_remap[2] 0x4000
+    setarray re_pad_remap[3] 0x8000
+    setarray re_pad_remap[4] 0x1000
+    setarray re_pad_remap[5] 0x4000
+    setarray re_pad_remap[6] 0x80
+    setarray re_pad_remap[7] 0x80
+    setarray re_pad_remap[8] 8
+    setarray re_pad_remap[9] 0x40
+    setarray re_pad_remap[10] 8
+    setarray re_pad_remap[11] 4
+    setarray re_pad_remap[12] 2
+    setarray re_pad_remap[13] 1
+    setarray re_pad_remap[14] 0x80
+    setarray re_pad_remap[15] 0x40
+ends
+
+defstate re_read_input
+    getinput[THISACTOR].bits re_in_bits
+    getinput[THISACTOR].extbits re_in_ext
+    set re_raw 0
+    set re_tmp re_in_ext and re_tmp EK_FORWARD_BIT   ifn re_tmp 0 or re_raw RAW_UP
+    set re_tmp re_in_ext and re_tmp EK_BACKWARD_BIT  ifn re_tmp 0 or re_raw RAW_DOWN
+    set re_tmp re_in_ext and re_tmp EK_TURNLEFT_BIT  ifn re_tmp 0 or re_raw RAW_LEFT
+    set re_tmp re_in_ext and re_tmp EK_TURNRIGHT_BIT ifn re_tmp 0 or re_raw RAW_RIGHT
+    set re_tmp re_in_ext and re_tmp EK_ALTFIRE_BIT   ifn re_tmp 0 or re_raw RAW_AIM
+    set re_tmp re_in_bits and re_tmp SK_OPEN_BIT     ifn re_tmp 0 or re_raw RAW_ACTION
+    set re_tmp re_in_bits and re_tmp SK_RUN_BIT      ifn re_tmp 0 or re_raw RAW_RUN
+    // Status button edge (upstream re_menu network event).
+    set re_tmp re_in_bits and re_tmp SK_INVENTORY_BIT
+    set re_menu_edge 0
+    ifn re_tmp 0 ife re_menu_prev 0 set re_menu_edge 1
+    set re_menu_prev re_tmp
+    // Duke never sees Jill's input: no Duke movement, firing, use or items.
+    setinput[THISACTOR].fvel 0
+    setinput[THISACTOR].svel 0
+    setinput[THISACTOR].q16avel 0
+    setinput[THISACTOR].q16horz 0
+    setinput[THISACTOR].bits 0
+    setinput[THISACTOR].extbits 0
+ends
+
+defstate re_update_pad
+    set re_pad 0
+    for re_i range 16
+    {
+        set re_tmp re_raw and re_tmp re_pad_remap[re_i]
+        ifn re_tmp 0 { set re_tmp2 1 shiftl re_tmp2 re_i or re_pad re_tmp2 }
+    }
+    set re_tmp re_pad and re_tmp 1 ifn re_tmp 0 { set re_tmp 4 xor re_tmp -1 and re_pad re_tmp }
+    set re_tmp re_pad and re_tmp 2 ifn re_tmp 0 { set re_tmp 8 xor re_tmp -1 and re_pad re_tmp }
+    set re_pressed re_prevpad xor re_pressed -1 and re_pressed re_pad
+    set re_prevpad re_pad
+    set re_raw_edge re_prev_raw xor re_raw_edge -1 and re_raw_edge re_raw
+    set re_prev_raw re_raw
+    add re_ticks 1
+ends
+
+// ---- Targeting --------------------------------------------------------------------
+// player_reticle_enemy 0x00496910: nearest visible target. Build sight checks
+// replace RDT boundaries.
+gamevar re_best 0 0
+defstate re_acquire_target
+    set re_aim_target -1 set re_best 2147483647
+    for re_k spritesofstatus 1
+    {
+        set re_a re_k state re_is_enemy
+        ifn re_result 0
+        {
+            ldist re_tmp3 THISACTOR re_k
+            ifle re_tmp3 RE_AIM_RANGE ifl re_tmp3 re_best
+            {
+                set re_a re_k state re_jill_sees
+                ifn re_result 0 { set re_aim_target re_k set re_best re_tmp3 }
+            }
+        }
+    }
+ends
+
+// Steering toward the locked target: Jill ((id&1)+6)*32 or id*32+0xf0 per tick.
+defstate re_follow_target
+    set re_tmp 0
+    ifge re_aim_target 0
+    {
+        set re_a re_aim_target state re_is_enemy
+        ifn re_result 0
+        {
+            ldist re_tmp3 THISACTOR re_aim_target
+            ifle re_tmp3 RE_AIM_RANGE { state re_jill_sees ifn re_result 0 set re_tmp 1 }
+        }
+    }
+    ife re_tmp 0 { set re_aim_lock 0 set re_aim_target -1 }
+    else
+    {
+        getactor[re_aim_target].x re_a getactor[THISACTOR].x re_b sub re_a re_b
+        getactor[re_aim_target].y re_c getactor[THISACTOR].y re_d sub re_c re_d
+        getangle re_tmp re_a re_c
+        getplayer[THISACTOR].ang re_tmp2
+        getincangle re_d re_tmp2 re_tmp
+        set re_tmp3 re_d ifl re_tmp3 0 mul re_tmp3 -1
+        set re_c 0x88 ifl re_tmp3 256 set re_c 0x70        // RE 0x110 / 0xe0 in Build units
+        ifg re_d re_c set re_d re_c
+        set re_tmp3 re_c mul re_tmp3 -1
+        ifl re_d re_tmp3 set re_d re_tmp3
+        add re_tmp2 re_d and re_tmp2 2047
+        setplayer[THISACTOR].ang re_tmp2
+    }
+ends
+
+// ---- Firing -------------------------------------------------------------------------
+// Original RE fire frames and samples drive native Duke hitscan: the handgun
+// fires Duke's pistol shot, the shotgun Duke's 7-pellet shotgun spread. Aim
+// direction (up/down) tilts the shot when no target is auto-aimed.
+defstate re_fire
+    ife re_animframe 5
+    {
+        ife re_visible_weapon ITEM_SHOTGUN set re_a RE_SND_SHOTGUN else set re_a RE_SND_HANDGUN
+        state re_sound
+    }
+    set re_tmp 100
+    set re_tmp2 re_aimflags and re_tmp2 0x80 ifn re_tmp2 0 set re_tmp 164
+    set re_tmp2 re_aimflags and re_tmp2 0x20 ifn re_tmp2 0 set re_tmp 36
+    setplayer[THISACTOR].horiz re_tmp
+    setplayer[THISACTOR].horizoff 0
+    ife re_visible_weapon ITEM_SHOTGUN
+    {
+        setplayer[THISACTOR].curr_weapon 2   // SHOTGUN_WEAPON: native pellet spread
+        for re_i range 7 shoot SHOTGUN
+    }
+    else
+    {
+        setplayer[THISACTOR].curr_weapon 1   // PISTOL_WEAPON
+        shoot SHOTSPARK1
+    }
+    setplayer[THISACTOR].horiz 100
+ends
+
+// ---- Interaction ---------------------------------------------------------------------------
+// Upstream Interact(): nearest visible pickup, then nearest station, then the
+// sword-key lock, then Duke's own "use" (doors, switches).
+gamevar re_pass_open 0 0
+gamevar re_near 0 0
+gamevar re_near_spr -1 0
+defstate re_interact
+    set re_tmp 0
+    ifg re_prompt_kind 0 set re_tmp 1
+    ifn re_status_open 0 set re_tmp 1
+    ifn re_box_open 0 set re_tmp 1
+    ifg re_save_state 0 set re_tmp 1
+    ife re_tmp 0
+    {
+        set re_near_spr -1 set re_near RE_PICKUP_RANGE
+        for re_k spritesofstatus 1
+        {
+            getactorvar[re_k].re_pickup_id re_tmp
+            ifg re_tmp 0
+            {
+                ldist re_tmp3 THISACTOR re_k
+                ifl re_tmp3 re_near
+                {
+                    set re_a re_k state re_can_interact
+                    ifn re_result 0 { set re_near_spr re_k set re_near re_tmp3 }
+                }
+            }
+        }
+        ifge re_near_spr 0 { set re_a re_near_spr state re_begin_pickup }
+        else
+        {
+            // Overlapping interaction circles: the nearest visible original object wins.
+            set re_near RE_PICKUP_RANGE
+            for re_k spritesofstatus 0
+            {
+                getactor[re_k].picnum re_tmp
+                set re_tmp2 0 ife re_tmp RE_T_CHEST set re_tmp2 1 ife re_tmp RE_T_TYPEWRITER set re_tmp2 1
+                ifn re_tmp2 0
+                {
+                    ldist re_tmp3 THISACTOR re_k
+                    ifl re_tmp3 re_near
+                    {
+                        set re_a re_k state re_can_interact
+                        ifn re_result 0 { set re_near_spr re_k set re_near re_tmp3 }
+                    }
+                }
+            }
+            ifge re_near_spr 0
+            {
+                getactor[re_near_spr].picnum re_tmp
+                ife re_tmp RE_T_TYPEWRITER { set re_a re_near_spr state re_use_typewriter }
+                else state re_open_box
+            }
+            else
+            {
+                // The sword key gates the red access switch; otherwise Duke's own use.
+                state re_find_key_switch
+                getplayer[THISACTOR].got_access re_tmp and re_tmp 2
+                ifge re_result 0 ife re_tmp 0 state re_use_cache
+                set re_pass_open 1
+                ifge re_result 0
+                {
+                    getplayer[THISACTOR].got_access re_tmp and re_tmp 2
+                    ife re_tmp 0 set re_pass_open 0
+                }
+            }
+        }
+    }
+ends
+
+// ---- Behaviours ------------------------------------------------------------------------------
+// player_input_to_behavior 0x004956a0: interaction before aim before direction.
+defstate re_walk_step
+    set re_tmp re_pressed and re_tmp 0x80
+    ifn re_tmp 0 state re_interact
+    set re_tmp 0 ifg re_prompt_kind 0 set re_tmp 1 ifn re_box_open 0 set re_tmp 1
+    ife re_tmp 0
+    {
+        set re_tmp re_pad and re_tmp 0x100
+        ifl re_equipped 0 set re_tmp 0
+        ifn re_tmp 0 { set re_behavior 0x12 set re_phase 0 }
+        else
+        {
+            // A fresh forward/back press restarts the cycle, diagonals do not.
+            set re_tmp re_pad and re_tmp 15
+            set re_tmp2 re_pressed and re_tmp2 1
+            set re_tmp3 re_pressed and re_tmp3 4
+            ife re_tmp 1 { set re_behavior 1 ifn re_tmp2 0 set re_phase 0 }
+            else ife re_tmp 3 { set re_behavior 2 ifn re_tmp2 0 set re_phase 0 }
+            else ife re_tmp 9 { set re_behavior 3 ifn re_tmp2 0 set re_phase 0 }
+            else ife re_tmp 2 { ifn re_behavior 4 set re_phase 0 set re_behavior 4 }
+            else ife re_tmp 8 { ifn re_behavior 5 set re_phase 0 set re_behavior 5 }
+            else ife re_tmp 6 { set re_behavior 6 ifn re_tmp3 0 set re_phase 0 }
+            else ife re_tmp 12 { set re_behavior 7 ifn re_tmp3 0 set re_phase 0 }
+            else ife re_tmp 4 { set re_behavior 8 ifn re_tmp3 0 set re_phase 0 }
+            // frame2 0x00495330: fixed increments, no angular acceleration.
+            ife re_behavior 2 { set re_a 0x28 state re_rotate }
+            ife re_behavior 6 { set re_a 0x28 state re_rotate }
+            ife re_behavior 3 { set re_a -40 state re_rotate }
+            ife re_behavior 7 { set re_a -40 state re_rotate }
+            ife re_behavior 4 { set re_a 0x60 state re_rotate }
+            ife re_behavior 5 { set re_a -96 state re_rotate }
+            set re_c 0
+            ifge re_behavior 1 ifle re_behavior 3 set re_c 1
+            ifge re_behavior 4 ifle re_behavior 5 set re_c 2
+            ifge re_behavior 6 ifle re_behavior 8 set re_c 3
+            ife re_c 1
+            {
+                set re_tmp re_pad and re_tmp 1
+                ife re_tmp 0 { set re_behavior 0 set re_phase 0 }
+                else
+                {
+                    ife re_phase 0 { set re_a 2 state re_new_motion set re_phase 1 }
+                    set re_tmp re_pad and re_tmp 0x200
+                    ifn re_tmp 0 { set re_behavior 0x0d set re_phase 0 }
+                    // Jill walk speed table 0x00495a70, read before Joint_move.
+                    set re_tmp re_animframe set re_speed 0x5d
+                    ifge re_tmp 20 ifl re_tmp 27 set re_speed 0x4e
+                    ifge re_tmp 7 ifl re_tmp 14 sub re_speed 15
+                    ifge re_tmp 22 ifl re_tmp 25 sub re_speed 15
+                    ifge re_tmp 9 ifl re_tmp 12 sub re_speed 15
+                    ifle re_anim_timing 1
+                    {
+                        ife re_tmp 8 { set re_a RE_SND_STEP_A state re_sound }
+                        ife re_tmp 22 { set re_a RE_SND_STEP_B state re_sound }
+                    }
+                    state re_joint_move
+                    getplayer[THISACTOR].ang re_b set re_a re_speed state re_translate_dir
+                }
+            }
+            else ife re_c 2
+            {
+                set re_tmp re_pad and re_tmp 10
+                ife re_tmp 0 { set re_behavior 0 set re_phase 0 }
+                else { ife re_phase 0 { set re_a 2 state re_new_motion set re_phase 1 } state re_joint_move }
+            }
+            else ife re_c 3
+            {
+                set re_tmp re_pad and re_tmp 4
+                ife re_tmp 0 { set re_behavior 0 set re_phase 0 }
+                else
+                {
+                    // player_ctrl_behavior_run is backing up; a near enemy in front changes pose/speed.
+                    set re_c 0
+                    for re_k spritesofstatus 1
+                    {
+                        ife re_c 0
+                        {
+                            set re_a re_k state re_is_enemy
+                            ifn re_result 0
+                            {
+                                ldist re_tmp3 THISACTOR re_k
+                                ifl re_tmp3 RE_NEAR_ENEMY
+                                {
+                                    getactor[re_k].x re_a getactor[THISACTOR].x re_b sub re_a re_b
+                                    getactor[re_k].y re_d getactor[THISACTOR].y re_b sub re_d re_b
+                                    getangle re_tmp re_a re_d
+                                    getplayer[THISACTOR].ang re_tmp2
+                                    getincangle re_d re_tmp2 re_tmp
+                                    ifl re_d 0 mul re_d -1
+                                    ifl re_d 256 { set re_a re_k state re_jill_sees ifn re_result 0 set re_c 1 }
+                                }
+                            }
+                        }
+                    }
+                    set re_d 3 ifn re_c 0 set re_d 2
+                    set re_tmp 0 ifn re_motion re_d set re_tmp 1 ife re_phase 0 set re_tmp 1
+                    ifn re_tmp 0 { set re_a re_d state re_new_motion set re_phase 1 }
+                    set re_speed 0x40 ifn re_c 0 set re_speed 0x3c
+                    ifle re_anim_timing 1
+                    {
+                        ife re_animframe 8 { set re_a RE_SND_STEP_A state re_sound }
+                        ife re_animframe 22 { set re_a RE_SND_STEP_B state re_sound }
+                    }
+                    set re_jm_body 1 state re_joint_move
+                    getplayer[THISACTOR].ang re_b add re_b 1024 and re_b 2047
+                    set re_a re_speed state re_translate_dir
+                }
+            }
+            else ife re_behavior 0
+            {
+                ife re_phase 0 { set re_a 0 state re_new_motion set re_phase 1 set re_idle_ticks 100 }
+                ife re_phase 1
+                {
+                    set re_jm_body 1 state re_joint_move
+                    sub re_idle_ticks 1 ife re_idle_ticks 0 { set re_phase 2 set re_a 0 state re_new_motion }
+                }
+                else ife re_phase 2
+                {
+                    state re_joint_move
+                    ifn re_result 0 { set re_phase 3 set re_a 1 state re_new_motion }
+                }
+                else state re_joint_move
+            }
+        }
+    }
+ends
+
+defstate re_run_step
+    set re_tmp re_pressed and re_tmp 0x80
+    ifn re_tmp 0 state re_interact
+    set re_tmp 0 ifg re_prompt_kind 0 set re_tmp 1 ifn re_box_open 0 set re_tmp 1
+    ife re_tmp 0
+    {
+        ifl re_phase 2
+        {
+            set re_tmp re_pad and re_tmp 1
+            set re_tmp2 re_pad and re_tmp2 0x100
+            ife re_tmp 0 set re_phase 2
+            else ifn re_tmp2 0 ifge re_equipped 0 set re_phase 2
+        }
+        set re_tmp re_pad and re_tmp 2 ifn re_tmp 0 { set re_a 0x30 state re_rotate }
+        set re_tmp re_pad and re_tmp 8 ifn re_tmp 0 { set re_a -48 state re_rotate }
+        ife re_phase 0
+        {
+            set re_tmp re_animframe
+            set re_a 3 state re_new_motion
+            set re_animframe 1 ifg re_tmp 9 ifl re_tmp 25 set re_animframe 12
+            set re_speed 0xd2 set re_phase 1
+        }
+        ife re_phase 1
+        {
+            set re_speed 0xd2
+            ifle re_anim_timing 1
+            {
+                ife re_animframe 0 { set re_a RE_SND_STEP_A state re_sound }
+                ife re_animframe 10 { set re_a RE_SND_STEP_B state re_sound }
+            }
+            state re_joint_move
+            set re_tmp re_pad and re_tmp 0x200
+            ife re_tmp 0
+            {
+                set re_behavior 1 set re_phase 1
+                set re_tmp re_animframe
+                set re_a 2 state re_new_motion
+                set re_animframe 10 ifn re_tmp 0 ifl re_tmp 12 set re_animframe 25
+            }
+        }
+        else
+        {
+            ife re_phase 2 { set re_a 0 state re_new_motion set re_phase 3 set re_run_stop 0 }
+            set re_jm_body 1 state re_joint_move
+            add re_run_stop 1
+            ifg re_run_stop 3 { set re_behavior 0 set re_phase 0 set re_speed 0 }
+            sub re_speed 0x1e
+        }
+        getplayer[THISACTOR].ang re_b set re_a re_speed state re_translate_dir
+    }
+ends
+
+// Source frame3 dispatch 0x00495530; handgun behaviour functions 0x004578f0 onward.
+gamevar re_olddir 0 0
+gamevar re_old_aim 0 0
+defstate re_gun_step
+    set re_tmp 0
+    ifge re_equipped 0
+    {
+        ife re_ids[re_equipped] ITEM_HANDGUN set re_tmp 1
+        ife re_ids[re_equipped] ITEM_SHOTGUN set re_tmp 1
+    }
+    ife re_tmp 0 { set re_behavior 0 set re_phase 0 }
+    else
+    {
+        // Held aim keeps tracking; a shot, directional aim or manual turn releases it.
+        set re_tmp re_pad and re_tmp 0x100
+        set re_tmp2 re_pad and re_tmp2 10
+        set re_tmp3 re_pressed and re_tmp3 0x40
+        ifn re_tmp2 0 set re_tmp 0
+        ife re_behavior 0x14 set re_tmp 0
+        ifn re_tmp3 0 set re_tmp 0
+        ifn re_tmp 0 { ifn re_aim_lock 0 state re_follow_target }
+        else { set re_aim_lock 0 set re_aim_target -1 }
+
+        ife re_behavior 0x12
+        {
+            set re_tmp 0
+            ife re_phase 0
+            {
+                set re_a 5 state re_new_motion set re_phase 1 set re_aimflags 0
+                state re_acquire_target
+                set re_aim_lock 0 ifge re_aim_target 0 set re_aim_lock 1
+            }
+            else ife re_phase 2 { set re_behavior 0x13 set re_phase 0 set re_tmp 1 }
+            ife re_tmp 0
+            {
+                set re_tmp re_pressed and re_tmp 0x40
+                ifn re_tmp 0 { set re_aim_lock 0 set re_aim_target -1 }
+                state re_joint_move add re_phase re_result
+                set re_tmp re_pad and re_tmp 2 ifn re_tmp 0 { set re_a 0x38 state re_rotate }
+                set re_tmp re_pad and re_tmp 8 ifn re_tmp 0 { set re_a -56 state re_rotate }
+                set re_tmp re_pad and re_tmp 5
+                ifg re_animframe 9 ifn re_tmp 0
+                {
+                    set re_tmp re_pad and re_tmp 4
+                    ifn re_tmp 0 { set re_aimflags 0x20 set re_motion 11 } else { set re_aimflags 0x80 set re_motion 8 }
+                    set re_behavior 0x15 set re_phase 0
+                }
+            }
+        }
+        else ife re_behavior 0x13
+        {
+            // Raise/hold pose runs before hold input, as in player_ctrl_frame3.
+            set re_olddir re_aimflags and re_olddir 0x20 shiftr re_olddir 4
+            set re_tmp re_aimflags shiftr re_tmp 7 add re_olddir re_tmp
+            ife re_phase 0 { set re_a re_olddir mul re_a 3 add re_a 7 state re_new_motion set re_phase 1 state re_joint_move }
+            else ife re_phase 1 state re_joint_move
+            else ife re_phase 2
+            {
+                ife re_blend 0
+                {
+                    set re_phase 3
+                    set re_a re_visible_weapon mul re_a 3 add re_a 2 add re_a re_olddir state re_new_motion
+                    set re_blend 7
+                }
+                else state re_joint_move
+            }
+            else ife re_phase 3
+            {
+                ifn re_blend 0 { set re_jm_body 1 state re_joint_move }
+                else { set re_phase 2 set re_a re_olddir mul re_a 3 add re_a 7 state re_new_motion set re_blend 7 }
+            }
+            set re_old_aim re_aimflags set re_aimflags 0x40
+            set re_tmp re_pad and re_tmp 0x10 ifn re_tmp 0 set re_aimflags 0x80
+            set re_tmp re_pad and re_tmp 0x20 ifn re_tmp 0 set re_aimflags 0x20
+            set re_d re_aimflags and re_d 0x20 shiftr re_d 4
+            set re_tmp re_aimflags shiftr re_tmp 7 add re_d re_tmp
+            set re_tmp re_aimflags xor re_tmp re_old_aim and re_tmp 0xa0
+            ifn re_tmp 0 { set re_behavior 0x15 set re_phase 0 set re_motion re_d mul re_motion 3 add re_motion 5 }
+            set re_tmp re_old_aim and re_tmp 0xa0
+            set re_tmp2 re_aimflags and re_tmp2 0x40
+            ifn re_tmp 0 ifn re_tmp2 0
+            {
+                set re_behavior 0x16 set re_phase 0
+                set re_tmp re_old_aim shiftr re_tmp 7 and re_tmp 1
+                set re_tmp2 re_old_aim shiftr re_tmp2 5 and re_tmp2 1 mul re_tmp2 2
+                add re_tmp re_tmp2 mul re_tmp 3 add re_tmp 5 set re_motion re_tmp
+            }
+            set re_tmp re_pad and re_tmp 0x100
+            ife re_tmp 0 { set re_behavior 0x17 set re_phase 0 }
+            else
+            {
+                set re_c 0
+                set re_tmp re_pad and re_tmp 0x40
+                ifn re_tmp 0
+                {
+                    ifg re_qty[re_equipped] 0 { set re_behavior 0x14 set re_phase 0 set re_c 1 }
+                    else
+                    {
+                        set re_tmp re_pressed and re_tmp 0x40
+                        ifn re_tmp 0
+                        {
+                            set re_a re_visible_weapon add re_a 9 state re_find_item
+                            ifge re_result 0 { set re_behavior 0x18 set re_phase 0 set re_c 1 }
+                        }
+                    }
+                }
+                ife re_c 0
+                {
+                    set re_tmp re_pad and re_tmp 2
+                    set re_tmp2 re_pad and re_tmp2 8
+                    ifn re_tmp 0 { set re_a 0x38 state re_rotate ifl re_phase 2 { set re_phase 2 set re_blend 0 } }
+                    else ifn re_tmp2 0 { set re_a -56 state re_rotate ifl re_phase 2 { set re_phase 2 set re_blend 0 } }
+                    else ifg re_phase 1 set re_phase 0
+                }
+            }
+        }
+        else ife re_behavior 0x14
+        {
+            ife re_phase 2 { set re_behavior 0x13 set re_phase 0 }
+            else
+            {
+                ife re_phase 0
+                {
+                    set re_phase 1
+                    set re_a re_aimflags and re_a 0x20 shiftr re_a 4
+                    set re_tmp re_aimflags shiftr re_tmp 7 add re_a re_tmp add re_a 2 mul re_a 3
+                    state re_new_motion
+                }
+                state re_joint_move add re_phase re_result
+                set re_tmp 3 ife re_visible_weapon ITEM_SHOTGUN set re_tmp 25
+                ife re_animframe re_tmp state re_casing_emit
+                ife re_animframe 1 { set re_tmp re_qty[re_equipped] sub re_tmp 1 setarray re_qty[re_equipped] re_tmp }
+                set re_tmp 0
+                ife re_animframe 5 set re_tmp 1
+                ife re_visible_weapon ITEM_SHOTGUN { ife re_animframe 7 set re_tmp 1 ife re_animframe 9 set re_tmp 1 }
+                ifn re_tmp 0 state re_fire
+                ife re_visible_weapon ITEM_SHOTGUN ife re_animframe 22 { set re_a RE_SND_PUMP state re_sound }
+                set re_tmp 8 ife re_visible_weapon ITEM_SHOTGUN set re_tmp 24
+                set re_tmp2 re_pad and re_tmp2 0x100
+                ifg re_animframe re_tmp ife re_tmp2 0 { set re_behavior 0x13 set re_phase 0 }
+            }
+        }
+        else ifge re_behavior 0x15 ifle re_behavior 0x16
+        {
+            ife re_phase 2 { set re_behavior 0x13 set re_phase 0 }
+            else
+            {
+                ife re_phase 0 { set re_a re_motion state re_new_motion set re_phase 1 }
+                ife re_behavior 0x16 set re_jm_reverse 1
+                state re_joint_move add re_phase re_result
+                set re_tmp re_pad and re_tmp 5
+                ifn re_tmp 0 { set re_behavior 0x13 set re_phase 0 }
+            }
+        }
+        else ife re_behavior 0x17
+        {
+            set re_tmp re_pad and re_tmp 2 ifn re_tmp 0 { set re_a 0x50 state re_rotate }
+            set re_tmp re_pad and re_tmp 8 ifn re_tmp 0 { set re_a -80 state re_rotate }
+            ife re_phase 0 { set re_motion 5 set re_phase 1 set re_blend 3 }
+            set re_jm_reverse 1 state re_joint_move
+            ifn re_result 0 { set re_behavior 0 set re_phase 0 }
+        }
+        else ife re_behavior 0x18
+        {
+            ife re_phase 0 { set re_a 14 state re_new_motion set re_phase 1 }
+            else
+            {
+                // fire_beretta_fx reads the frame before Joint_move; refill at source frame 0x11.
+                ifle re_anim_timing 1
+                {
+                    ife re_visible_weapon ITEM_HANDGUN ife re_animframe 17
+                    { state re_reload_from_largest_stack set re_a RE_SND_MAGAZINE state re_sound }
+                    ife re_visible_weapon ITEM_SHOTGUN
+                    {
+                        set re_tmp 0 ife re_animframe 15 set re_tmp 1 ife re_animframe 25 set re_tmp 1 ife re_animframe 35 set re_tmp 1
+                        ifn re_tmp 0
+                        {
+                            ife re_animframe 15 state re_reload_from_largest_stack
+                            set re_a RE_SND_SHELL_RELOAD state re_sound
+                        }
+                    }
+                }
+                state re_joint_move
+                ifn re_result 0 { set re_behavior 0x13 set re_phase 0 }
+            }
+        }
+    }
+ends
+
+// ---- One game tic --------------------------------------------------------------------------
+// Upstream MovePlayer(), run from EVENT_PROCESSINPUT.
+defstate re_move_player
+    state re_update_pad
+    set re_pass_open 0
+    set re_tmp 0 ifle re_health 0 set re_tmp 1 ifge re_death_stage 3 set re_tmp 1
+    ifn re_tmp 0 state re_death_step
+    else
+    {
+        // Menu sounds on fresh input while a menu (not a prompt) is up.
+        set re_tmp 0 ifn re_status_open 0 set re_tmp 1 ifn re_box_open 0 set re_tmp 1
+        ifn re_tmp 0 ife re_prompt_kind 0 ife re_viewer_item 0 ife re_menu_fade_mode 0
+        {
+            set re_tmp re_raw_edge and re_tmp 0xf000 ifn re_tmp 0 { set re_a RE_SND_CURSOR state re_sound }
+            set re_tmp re_pressed and re_tmp 0x4000
+            set re_tmp2 re_pressed and re_tmp2 0x8000
+            ifn re_tmp 0 { set re_a RE_SND_DECIDE state re_sound }
+            else ifn re_tmp2 0 { set re_a RE_SND_CANCEL state re_sound }
+        }
+        set re_c 0
+        ifn re_status_open 0 set re_c 1 ifn re_box_open 0 set re_c 1 ifg re_prompt_kind 0 set re_c 1 ifg re_menu_fade_mode 0 set re_c 1
+        ifn re_c 0 state re_menu_visual_step
+        ifg re_menu_fade_mode 0 nullop
+        else ifg re_save_state 0
+        {
+            set re_tmp re_pressed and re_tmp 0x4000
+            set re_tmp2 re_pressed and re_tmp2 0x8000
+            ifn re_tmp 0 { set re_a RE_SND_TYPE_B state re_sound } else ifn re_tmp2 0 { set re_a RE_SND_CANCEL state re_sound }
+            state re_typewriter_step
+        }
+        else ifg re_viewer_item 0 state re_item_view_step
+        else ifg re_prompt_kind 0 state re_prompt_step
+        else ifn re_box_open 0 state re_box_step
+        else ifn re_status_open 0 state re_status_step
+        else ifn re_menu_edge 0 state re_toggle_status
+        else
+        {
+            ife re_behavior 0x0d state re_run_step
+            else ifge re_behavior 0x12 state re_gun_step
+            else state re_walk_step
+            state re_pose_at_player
+        }
+    }
+ends

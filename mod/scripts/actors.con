@@ -1,0 +1,116 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Actor code for RE pickups, their glints and spent casings. gen/actors.con
+// binds every model/effect frame tile to these states (a sprite's code follows
+// its current picnum, and effects animate by changing picnum).
+
+// Pickup kind -> RE item and quantity (upstream REClip/REShells/... defaults).
+gamearray re_kind_item 6
+gamearray re_kind_qty 6
+defstate re_init_pickup_kinds
+    setarray re_kind_item[RE_PICKUP_CLIP] ITEM_CLIP       setarray re_kind_qty[RE_PICKUP_CLIP] 15
+    setarray re_kind_item[RE_PICKUP_SHELLS] ITEM_SHELLS   setarray re_kind_qty[RE_PICKUP_SHELLS] 7
+    setarray re_kind_item[RE_PICKUP_SHOTGUN] ITEM_SHOTGUN setarray re_kind_qty[RE_PICKUP_SHOTGUN] 7
+    setarray re_kind_item[RE_PICKUP_HERB] ITEM_HERB       setarray re_kind_qty[RE_PICKUP_HERB] 1
+    setarray re_kind_item[RE_PICKUP_RIBBON] ITEM_RIBBON   setarray re_kind_qty[RE_PICKUP_RIBBON] 3
+    setarray re_kind_item[RE_PICKUP_KEY] ITEM_KEY         setarray re_kind_qty[RE_PICKUP_KEY] 1
+ends
+
+// Glint animation (CORE00.ESP type 0x0b, depth 28): eleven visible source
+// ticks, then 100..140 hidden.
+gamearray re_glint_frames 9
+gamearray re_glint_delays 9
+defstate re_init_glint_tables
+    setarray re_glint_frames[0] 4 setarray re_glint_frames[1] 8 setarray re_glint_frames[2] 4
+    setarray re_glint_frames[3] 7 setarray re_glint_frames[4] 5 setarray re_glint_frames[5] 9
+    setarray re_glint_frames[6] 6 setarray re_glint_frames[7] 8 setarray re_glint_frames[8] 4
+    setarray re_glint_delays[0] 1 setarray re_glint_delays[1] 1 setarray re_glint_delays[2] 1
+    setarray re_glint_delays[3] 1 setarray re_glint_delays[4] 1 setarray re_glint_delays[5] 2
+    setarray re_glint_delays[6] 2 setarray re_glint_delays[7] 1 setarray re_glint_delays[8] 1
+ends
+
+gamevar re_gl_phase 0 2
+gamevar re_gl_timer 0 2
+gamevar re_gl_frame 0 2
+gamevar re_gl_delay 0 2
+
+define RE_GLINT_RISE 768       // 6 Doom units above the pickup
+
+defstate re_glint_actor
+    getactor[THISACTOR].owner re_a
+    set re_tmp 0
+    ifge re_a 0 { getactorvar[re_a].re_pickup_id re_tmp }
+    ife re_tmp 0 killit
+    getactor[re_a].x re_px getactor[re_a].y re_py getactor[re_a].z re_pz sub re_pz RE_GLINT_RISE
+    setsprite THISACTOR re_px re_py re_pz
+    getactorvar[THISACTOR].re_gl_phase re_b
+    ife re_b 0
+    {
+        set re_b 1 setactorvar[THISACTOR].re_gl_timer 11 setactorvar[THISACTOR].re_gl_frame 0 setactorvar[THISACTOR].re_gl_delay 1
+    }
+    ife re_b 1
+    {
+        getactorvar[THISACTOR].re_gl_frame re_c
+        set re_tmp re_glint_frames[re_c] add re_tmp RE_T_GLINT
+        cstat 128
+        setactor[THISACTOR].picnum re_tmp
+        getactorvar[THISACTOR].re_gl_timer re_tmp sub re_tmp 1 setactorvar[THISACTOR].re_gl_timer re_tmp
+        ife re_tmp 0 { set re_b 2 cstat 32768 }
+        else
+        {
+            getactorvar[THISACTOR].re_gl_delay re_tmp sub re_tmp 1
+            ifle re_tmp 0 { add re_c 1 ifg re_c 8 set re_c 8 set re_tmp re_glint_delays[re_c] }
+            setactorvar[THISACTOR].re_gl_delay re_tmp
+            setactorvar[THISACTOR].re_gl_frame re_c
+        }
+    }
+    else ife re_b 2
+    {
+        set re_b 3 randvar re_tmp 4 add re_tmp 10 mul re_tmp 10
+        setactorvar[THISACTOR].re_gl_timer re_tmp
+        cstat 32768
+    }
+    else
+    {
+        getactorvar[THISACTOR].re_gl_timer re_tmp sub re_tmp 1 setactorvar[THISACTOR].re_gl_timer re_tmp
+        ife re_tmp 0 set re_b 0
+    }
+    setactorvar[THISACTOR].re_gl_phase re_b
+ends
+
+defstate re_pickup_actor
+    ife re_actor_ready 0
+    {
+        set re_actor_ready 1
+        getactor[THISACTOR].lotag re_a
+        ifl re_a 0 set re_a 0 ifg re_a 5 set re_a 5
+        // Runtime spawns carry no lotag: derive the kind from the model tile.
+        getactor[THISACTOR].picnum re_tmp2
+        ife re_a 0 { for re_tmp range 6 { ife PICKUP_TILE[re_tmp] re_tmp2 set re_a re_tmp } }
+        set re_pickup_id re_kind_item[re_a]
+        set re_pickup_qty re_kind_qty[re_a]
+        cstat 0
+        sizeat 64 64
+        espawn RE_T_GLINT
+        set re_pickup_glint RETURN
+        setactor[RETURN].owner THISACTOR
+        setactor[RETURN].cstat 32768
+        setactor[RETURN].xrepeat 16
+        setactor[RETURN].yrepeat 16
+        setactor[RETURN].shade -16
+    }
+    ife re_pickup_id 0 killit
+    // Pickups rest on the floor and never move (upstream REPickup.Tick).
+    getactor[THISACTOR].htfloorz re_tmp
+    setactor[THISACTOR].z re_tmp
+    setactor[THISACTOR].xvel 0
+    setactor[THISACTOR].zvel 0
+ends
+
+defstate re_casing_actor
+    ife re_actor_ready 1
+    {
+        set re_cs_spr THISACTOR
+        state re_cs_step
+        ifn re_cs_dead 0 killit
+    }
+ends

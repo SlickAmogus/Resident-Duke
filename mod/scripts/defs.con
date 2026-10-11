@@ -44,6 +44,13 @@ definesound RE_SND_DEATH        sounds/re1/death.wav        0 0 255 0 0
 definesound RE_SND_BODY_THUD    sounds/re1/body-thud.wav    0 0 255 0 0
 definesound RE_SND_TITLE        sounds/re1/title.wav        0 0 255 0 0
 
+// ---- Music: E1L1's slots play the original RE tracks ------------------------------
+// Slot 0 corridors (Bgm_00), slot 1 main hall (Bgm_13); BgmRoomData stage 0.
+music 1 music/REMANS.wav music/REHALL.wav
+
+definequote 9601 Use a typewriter to save.
+define RE_QUOTE_SAVE_ONLY 9601
+
 // ---- Raw input bits (upstream controls.cfg values) --------------------------
 define RAW_AIM    8
 define RAW_RUN    64

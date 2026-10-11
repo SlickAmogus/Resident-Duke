@@ -1,3 +1,0 @@
-// RE1 has no persistent gameplay HUD. Its status display is the native menu.
-statusbar normal { }
-statusbar fullscreen { }

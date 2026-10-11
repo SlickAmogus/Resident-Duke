@@ -1,0 +1,191 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Engine event wiring: level start, the per-tic RE loop, damage, cameras,
+// presentation and Duke HUD/voice suppression.
+
+define RE_E1L1_VOLUME 0
+define RE_E1L1_LEVEL 0
+define MENU_SAVE_ID 350
+define MENU_CLOSE_ID -2
+
+// Shown once per program run, like upstream's re_start_title launch option.
+gamevar re_title_pending 1 131072   // GAMEVAR_NORESET
+
+defstate re_init_tables
+    state re_load_tables
+    state re_park_init
+    state re_init_pad_remap
+    state re_init_pickup_kinds
+    state re_init_glint_tables
+ends
+
+// Fresh game state (upstream PostBeginPlay): Jill with a loaded Beretta.
+defstate re_new_game
+    for re_i range 8 { setarray re_ids[re_i] 0 setarray re_qty[re_i] 0 }
+    for re_i range 48 { setarray re_box_ids[re_i] 0 setarray re_box_qty[re_i] 0 }
+    setarray re_ids[0] ITEM_HANDGUN setarray re_qty[0] 15
+    set re_used 1 set re_equipped 0 set re_combine_from -1 set re_examined 0
+    set re_health RE_MAX_HEALTH
+    set re_status_open 0 set re_box_open 0 set re_prompt_kind 0 set re_viewer_item 0 set re_menu_fade_mode 0
+    set re_save_state 0 set re_save_pending 0 set re_save_counter 0 set re_cache_unlocked 0
+    set re_death_stage 0 set re_death_request 0 set re_death_blood -1
+    set re_pending_pickup -1 set re_viewer_sprite -1 set re_active_typewriter -1
+    set re_frozen 0 set re_cam -1 set re_music 0 set re_falling 0 set re_fall_fade 0 set re_fall_ticks 0
+    set re_raw 0 set re_prev_raw 0 set re_prevpad 0 set re_menu_prev 0
+    set re_startup_cover 3
+    set re_jill -1
+    setplayer[THISACTOR].max_player_health RE_MAX_HEALTH
+    setactor[THISACTOR].extra RE_MAX_HEALTH
+    setplayer[THISACTOR].last_extra RE_MAX_HEALTH
+    setplayer[THISACTOR].got_access 0
+    setplayer[THISACTOR].horiz 100
+    setuserdef .screen_size 0
+    setuserdef .crosshair 0
+    setuserdef .fta_on 0
+    setuserdef .show_level_text 0
+    setuserdef .levelstats 0
+    state re_spawn_jill
+    state re_sync_weapon_model
+    ife re_title_pending 1
+    {
+        set re_title_pending 0
+        set re_death_stage 4 set re_death_fade 0x7fff set re_death_title_option 0
+        state re_update_freeze
+    }
+ends
+
+onevent EVENT_ENTERLEVEL
+    state re_init_tables
+    getuserdef .volume_number re_a
+    getuserdef .level_number re_b
+    set re_tmp 0 ifn re_a RE_E1L1_VOLUME set re_tmp 1 ifn re_b RE_E1L1_LEVEL set re_tmp 1
+    // Upstream loops its single map: leaving E1L1 starts it again.
+    ifn re_tmp 0 startlevel RE_E1L1_VOLUME RE_E1L1_LEVEL
+    else state re_new_game
+endevent
+
+onevent EVENT_LOADGAME
+    state re_init_tables
+    // Upstream WorldLoaded(IsSaveGame): transient input/menu state never resumes.
+    set re_save_state 0 set re_save_pending 0 set re_active_typewriter -1
+    set re_raw 0 set re_prev_raw 0 set re_prevpad 0 set re_menu_prev 0 set re_cam -1
+    set re_death_request 0
+    state re_update_freeze
+endevent
+
+// Damage before Duke sees it: monster hits are doubled (upstream mashup
+// balance), hazards unchanged, and Duke's own death/jibs never trigger.
+gamevar re_dmg 0 0
+gamevar re_dmg_spr 0 0
+onevent EVENT_PREWORLD
+    set re_tmp 0
+    getplayer[re_tmp].i re_dmg_spr
+    ifge re_dmg_spr 0
+    {
+        getactor[re_dmg_spr].htextra re_dmg
+        ifg re_dmg 0
+        {
+            getactor[re_dmg_spr].htowner re_tmp
+            ifge re_tmp 0 { getactor[re_tmp].statnum re_tmp2 ife re_tmp2 1 mul re_dmg 2 }
+            ife re_death_stage 0 ifg re_health 0 { sub re_health re_dmg ifl re_health 0 set re_health 0 }
+            setactor[re_dmg_spr].htextra -1
+        }
+    }
+endevent
+
+onevent EVENT_INCURDAMAGE
+    set RETURN 1
+endevent
+
+// The RE loop: one source tick per game tic.
+onevent EVENT_PROCESSINPUT
+    // Hazard damage Duke applied directly to the sprite since last tic.
+    getactor[THISACTOR].extra re_a
+    getplayer[THISACTOR].last_extra re_b
+    getplayer[THISACTOR].extra_extra8 re_c shiftr re_c 8
+    set re_dmg re_b sub re_dmg re_a add re_dmg re_c
+    setplayer[THISACTOR].extra_extra8 0
+    ifg re_dmg 0 ife re_death_stage 0 ifg re_health 0 { sub re_health re_dmg ifl re_health 0 set re_health 0 }
+    set re_a re_health ifl re_a 1 set re_a 1
+    setactor[THISACTOR].extra re_a
+    setplayer[THISACTOR].last_extra re_a
+
+    state re_read_input
+    ifg re_startup_cover 0 sub re_startup_cover 1
+    state re_after_save
+    state re_move_player
+    // Death title requests (upstream deathRequest bridge).
+    ife re_death_request RE_DEATH_TITLE_NEW { set re_death_request 0 resetplayerflags 8 }
+    else ife re_death_request RE_DEATH_TITLE_LOAD
+    {
+        set re_death_request 0
+        getplayer[THISACTOR].gm re_tmp or re_tmp 2 setplayer[THISACTOR].gm re_tmp   // MODE_MENU
+        cmenu 300                                                                   // MENU_LOAD
+    }
+    // Pass Duke's "use" through only for interactions Jill delegated to it.
+    ifn re_pass_open 0 { setinput[THISACTOR].bits SK_OPEN_BIT set re_pass_open 0 }
+    state re_update_fall
+    // Camera: Jill's position, mid-body height and sector.
+    ife re_death_stage 0
+    {
+        getactor[THISACTOR].x re_px getactor[THISACTOR].y re_py getactor[THISACTOR].z re_pz sub re_pz 6144
+        getplayer[THISACTOR].cursectnum re_psect
+        state re_update_camera
+    }
+endevent
+
+// Fixed camera for the main view.
+onevent EVENT_DISPLAYROOMS
+    ifge re_cam 0
+    {
+        set camerax re_cam_x
+        set cameray re_cam_y
+        set cameraz re_cam_z
+        set re_tmp re_cam_ang shiftl re_tmp 16 set cameraq16ang re_tmp
+        set camerahoriz re_cam_horiz
+        set camerasect re_cam_sect
+    }
+endevent
+
+onevent EVENT_DISPLAYREST
+    state re_render_overlay
+endevent
+
+// No Duke HUD: weapon, crosshair, status bar, level stats.
+onevent EVENT_DISPLAYWEAPON set RETURN 1 endevent
+onevent EVENT_DISPLAYCROSSHAIR set RETURN -1 endevent
+onevent EVENT_DISPLAYSBAR set RETURN 1 endevent
+onevent EVENT_DISPLAYLEVELSTATS set RETURN 1 endevent
+onevent EVENT_INVENTORY set RETURN -1 endevent
+
+// Jill is silent: Duke's voice lines and pain/landing grunts are suppressed.
+onevent EVENT_SOUND
+    for re_tmp range RE_DUKE_VOICE_COUNT
+    {
+        ife DUKE_VOICE[re_tmp] RETURN set RETURN -1
+    }
+endevent
+
+// Runtime-spawned Duke pickups (enemy drops) become RE pickups or vanish.
+onevent EVENT_EGS
+    getactor[THISACTOR].picnum re_tmp
+    for re_i range RE_DUKE_PICKUPS
+    {
+        ife DUKE_PICKUP_TILE[re_i] re_tmp
+        {
+            set re_tmp2 DUKE_PICKUP_KIND[re_i]
+            setactor[THISACTOR].picnum PICKUP_TILE[re_tmp2]
+            setactor[THISACTOR].lotag re_tmp2
+            setactor[THISACTOR].xrepeat 64
+            setactor[THISACTOR].yrepeat 64
+        }
+    }
+    for re_i range RE_DUKE_REMOVED
+    {
+        ife DUKE_REMOVED_TILE[re_i] re_tmp setactor[THISACTOR].picnum RE_T_REMOVED
+    }
+endevent
+
+// Saving is the typewriter's job (upstream RETypewriterOnlyMenu).
+onevent EVENT_CHANGEMENU
+    ife RETURN MENU_SAVE_ID { set RETURN MENU_CLOSE_ID quote RE_QUOTE_SAVE_ONLY }
+endevent

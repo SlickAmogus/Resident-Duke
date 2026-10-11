@@ -17,6 +17,9 @@ ForceSetup = 0
 NoAutoLoad = 1
 SelectedGRP = "duke3d.grp"
 
+[Updates]
+CheckForUpdates = 0
+
 [Screen Setup]
 Polymer = 0
 ScreenBPP = 32
