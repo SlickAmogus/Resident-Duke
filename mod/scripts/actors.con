@@ -33,14 +33,14 @@ gamevar re_gl_timer 0 2
 gamevar re_gl_frame 0 2
 gamevar re_gl_delay 0 2
 
-define RE_GLINT_RISE 768       // 6 Doom units above the pickup
+define RE_GLINT_RISE 768       // 6 Doom units above the pickup (at jill_scale 1)
 
 defstate re_glint_actor
     getactor[THISACTOR].owner re_a
     set re_tmp 0
     ifge re_a 0 { getactorvar[re_a].re_pickup_id re_tmp }
     ife re_tmp 0 killit
-    getactor[re_a].x re_px getactor[re_a].y re_py getactor[re_a].z re_pz sub re_pz RE_GLINT_RISE
+    getactor[re_a].x re_px getactor[re_a].y re_py getactor[re_a].z re_pz set re_tmp RE_GLINT_RISE mul re_tmp RE_SCALE_PCT div re_tmp 100 sub re_pz re_tmp
     setsprite THISACTOR re_px re_py re_pz
     getactorvar[THISACTOR].re_gl_phase re_b
     ife re_b 0
@@ -96,8 +96,9 @@ defstate re_pickup_init
     set re_pickup_glint RETURN
     setactor[RETURN].owner THISACTOR
     setactor[RETURN].cstat 32768
-    setactor[RETURN].xrepeat 16
-    setactor[RETURN].yrepeat 16
+    set re_tmp 16 mul re_tmp RE_SCALE_PCT div re_tmp 100
+    setactor[RETURN].xrepeat re_tmp
+    setactor[RETURN].yrepeat re_tmp
     setactor[RETURN].shade -16
     changespritestat RETURN 1
 ends

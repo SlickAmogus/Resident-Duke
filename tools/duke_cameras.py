@@ -9,17 +9,19 @@ framing distance. The runtime keeps a camera while it still frames Jill and
 only cuts to the current sector's camera when it loses her, which merges the
 many small Build sectors into stable RE-like shots.
 
-tools/e1l1-cameras.json may override any sector: {"<sector>": {"x":..,"y":..,
-"z":.., "look": [x, y, z]}}.
+tools/e1l1-layout.json "cameras" may override any zone shot:
+{"<sector>:<col>:<row>": {"x":.., "y":.., "z":.., "look": [x, y, z]}}.
 """
 import json
 import math
 
 # Build z is 16x finer than xy. Jill stands ~11000 z tall.
-JILL_MID = 6000          # z above floor used as the visibility target
-CAMERA_RISE = 22000      # preferred camera height above floor (z)
+from common import jill_scale
+SCALE = jill_scale()
+JILL_MID = 6000 * SCALE  # z above floor used as the visibility target
+CAMERA_RISE = 22000 * SCALE  # preferred camera height above floor (z)
 CEILING_MARGIN = 1536
-MIN_FRAMING = 900        # xy: closer sample points are not framed well
+MIN_FRAMING = 900 * SCALE  # xy: closer sample points are not framed well
 HORIZ_SCALE = 128        # Build horiz pixels per unit tan(pitch) (verified in game)
 
 
@@ -75,7 +77,7 @@ class Sight:
 
 
 CELL = 4096               # zone grid for large sectors (xy units)
-FRAME_DIST = 2800         # preferred camera-to-zone-centre distance
+FRAME_DIST = 2800 * SCALE  # preferred camera-to-zone-centre distance
 
 
 def zone_grid(m, s):
@@ -195,10 +197,10 @@ def orient(x, y, z, look):
     return ang, max(-99, min(299, horiz))
 
 
-def generate(m, sector_count, overrides_path):
-    """One camera per zone; zones are CELL-sized grid cells of each sector."""
+def generate(m, sector_count, overrides):
+    """One camera per zone; zones are CELL-sized grid cells of each sector.
+    overrides: {"sector:col:row": {"x","y","z","look":[x,y,z]}} from the layout file."""
     sight = Sight(m)
-    overrides = json.loads(overrides_path.read_text()) if overrides_path.exists() else {}
     cameras = []; zones = []; sector_zone = []
     for s in range(sector_count):
         x0, y0, cols, rows = zone_grid(m, s)

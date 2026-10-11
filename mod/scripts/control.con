@@ -30,7 +30,7 @@ defstate re_jill_sees
     getplayer[THISACTOR].posx re_b getplayer[THISACTOR].posy re_c getplayer[THISACTOR].posz re_d
     getplayer[THISACTOR].cursectnum re_tmp
     getactor[re_a].x re_px getactor[re_a].y re_py getactor[re_a].z re_pz getactor[re_a].sectnum re_psect
-    sub re_pz 6144
+    set re_mid 6144 mul re_mid RE_SCALE_PCT div re_mid 100 sub re_pz re_mid
     cansee re_b re_c re_d re_tmp re_px re_py re_pz re_psect re_result
 ends
 

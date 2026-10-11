@@ -1,0 +1,6 @@
+{
+  "_comment": "Hand-tunable E1L1 layout. Edit here or with the Blender editor (edit_layout.bat), then run setup.py --build-only.",
+  "jill_scale": 1.5,
+  "stations": {},
+  "cameras": {}
+}

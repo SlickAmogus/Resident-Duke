@@ -40,8 +40,23 @@ def prepare_runtime():
     shutil.copyfile(ROOT / 'controls.cfg', RUNTIME / 'autoexec.cfg')
 
 
+# EDuke32 reads files from the package on demand for the whole session, so it
+# runs from a private copy: rebuilding build/resident-duke.zip mid-session
+# would otherwise corrupt the running game (missing art, crashes).
+RUNTIME_PACKAGE = RUNTIME / 'resident-duke.zip'
+
+
+def snapshot_package():
+    try:
+        if not RUNTIME_PACKAGE.exists() or RUNTIME_PACKAGE.stat().st_mtime < PACKAGE.stat().st_mtime                 or RUNTIME_PACKAGE.stat().st_size != PACKAGE.stat().st_size:
+            temp = RUNTIME_PACKAGE.with_suffix('.tmp')
+            shutil.copyfile(PACKAGE, temp); os.replace(temp, RUNTIME_PACKAGE)
+    except PermissionError:
+        raise RuntimeError('Resident Duke appears to be running already; close it before starting another copy.')
+
+
 def command(extra):
-    return [str(EXE), '-usecwd', '-nosetup', '-j', str(GRP.parent), '-gamegrp', GRP.name, '-g', str(PACKAGE),
+    return [str(EXE), '-usecwd', '-nosetup', '-j', str(GRP.parent), '-gamegrp', GRP.name, '-g', str(RUNTIME_PACKAGE),
             '-x', 'RDUKE.CON', '-h', 'RDUKE.DEF', '-v1', '-l1', '-s2', *extra]
 
 
@@ -59,6 +74,7 @@ def main():
     if not EXE.is_file(): raise RuntimeError('Missing EDuke32; unpack it into dependencies/eduke32/')
     if not GRP.is_file(): raise RuntimeError('Missing dependencies/duke3d/duke3d.grp')
     prepare_runtime()
+    snapshot_package()
     # Developer trace (CON addlog lines in build/runtime/eduke32.log).
     marker = RUNTIME / 'resident-duke-debug.bin'
     if debug: marker.write_bytes(bytes([1, 0, 0, 0]))

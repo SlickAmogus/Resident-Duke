@@ -83,10 +83,8 @@ define ITEM_HERB_GGG 74    // 0x4a
 define RE_MAX_HEALTH 96
 
 // ---- Build/RE unit conversion ------------------------------------------------
-// One RE unit is 56/1800 Doom units (upstream) and one Doom unit is 8 Build xy
-// units here (tools/common.py DOOM_TO_BUILD): RE -> Build xy = 56/225.
-define RE_XY_NUM 56
-define RE_XY_DEN 225
+// RE_XY_NUM / RE_XY_DEN (RE units -> Build xy) and RE_SCALE_PCT come from
+// gen/data.con, derived from jill_scale in tools/e1l1-layout.json.
 define CLIPMASK0 65537
 define CLIPMASK1 16777280   // (256<<16)+64
 define STAT_PARK_BASE 900   // world freeze parks status lists at 900+stat
@@ -246,6 +244,7 @@ gamevar re_px 0 0
 gamevar re_py 0 0
 gamevar re_pz 0 0
 gamevar re_psect 0 0
+gamevar re_mid 0 0   // Jill's mid-body height (z) at the current scale
 
 // Per-actor data for RE pickups (flag 2 = one value per sprite).
 gamevar re_pickup_id 0 2

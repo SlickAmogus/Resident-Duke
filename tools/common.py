@@ -19,14 +19,26 @@ DECOMP = ROOT / 'resident-evil-pc-decomp-main'
 
 # One GZDoom map unit in Resident Doom equals 56/1800 RE units. Resident Duke
 # keeps the upstream converters' Doom-unit geometry and maps one Doom unit to
-# DOOM_TO_BUILD Build xy units, which makes Jill as tall as Duke's own sprite
-# (~700 xy). Build z is 16x finer than xy.
-DOOM_TO_BUILD = 8
+# BASE_DOOM_TO_BUILD Build xy units at jill_scale 1.0, which makes Jill as tall
+# as Duke's own sprite (~700 xy). tools/e1l1-layout.json's jill_scale enlarges
+# Jill, her movement and every RE object together. Build z is 16x finer than xy.
+BASE_DOOM_TO_BUILD = 8
 RE_TO_DOOM = 56 / 1800
-RE_TO_BUILD = RE_TO_DOOM * DOOM_TO_BUILD
-# EDuke32 draws one MD3 unit (after the format's /64) as 10.24 * scale Build
-# xy units at xrepeat 64 (mdsprite.cpp: m->scale .01, /1024 world divisor).
-MD3_DEF_SCALE = DOOM_TO_BUILD / 10.24
+LAYOUT = ROOT / 'tools/e1l1-layout.json'
+
+
+def load_layout():
+    return json.loads(LAYOUT.read_text()) if LAYOUT.exists() else {}
+
+
+def jill_scale():
+    return float(load_layout().get('jill_scale', 1.0))
+
+
+def md3_def_scale():
+    """EDuke32 draws one MD3 unit (after the format's /64) as 10.24 * scale Build
+    xy units at xrepeat 64 (mdsprite.cpp: m->scale .01, /1024 world divisor)."""
+    return BASE_DOOM_TO_BUILD * jill_scale() / 10.24
 
 
 def stage(*parts):

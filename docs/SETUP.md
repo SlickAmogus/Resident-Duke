@@ -42,6 +42,16 @@ Saving is done at typewriters only and spends one ink ribbon, as in RE1. The nat
 
 Each typewriter save writes an ordinary EDuke32 save. Load it from EDuke32's menu (Escape, then Load Game), or choose *Continue* on the death screen. The eight typewriter rows and their counters are kept in `build/runtime/resident-duke-typewriter.bin`.
 
+## Layout and scale
+
+`tools/e1l1-layout.json` holds hand tuning that survives rebuilds:
+
+- `jill_scale`: default 1.5. It scales Jill, her movement and the RE objects together.
+- Station positions.
+- Per-zone camera shots.
+
+Edit it with the Blender editor (`edit_layout.bat`) or by hand, then rebuild with `python setup.py --build-only`. The game always runs from its own copy of the package, so rebuilding while it runs is safe; restart the game to see the changes.
+
 ## Rebuilding
 
 - **Repackage after editing scripts:** `python setup.py --build-only` repackages from the existing converted assets.

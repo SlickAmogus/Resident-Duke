@@ -12,7 +12,7 @@ import struct
 import zipfile
 from pathlib import Path
 
-from common import ROOT, ASSETS, STAGE, MD3_DEF_SCALE, write_json
+from common import ROOT, ASSETS, STAGE, md3_def_scale, jill_scale, write_json
 from duke_grp import Grp
 from re1_item_tables import slice_items
 from re1_messages import streams, glyph
@@ -181,18 +181,18 @@ def write_models(tiles):
     for file, define in JILL_VARIANTS:
         base = tiles.reserve(define, frames)
         # One RE source tick per frame; a short smooth keeps 30 Hz poses fluid.
-        blocks.append(model_block('models/jill/' + file, 'models/jill/skin.png', MD3_DEF_SCALE,
+        blocks.append(model_block('models/jill/' + file, 'models/jill/skin.png', md3_def_scale(),
                                   [('pose%d' % i, base + i) for i in range(frames)], surfaces=15, smooth=0.034))
     # Item viewer models: 65 intro steps each, in convert_item_views order.
     views = json.loads((ASSETS / 'item-view-manifest.json').read_text())
     base = tiles.reserve('RE_T_ITEMVIEW', 65 * len(views))
     for i, view in enumerate(views):
         blocks.append(model_block('models/items/%s.md3' % view['file'], 'models/items/%s.png' % view['file'],
-                                  MD3_DEF_SCALE, [('frame%d' % s, base + i * 65 + s) for s in range(65)]))
+                                  md3_def_scale(), [('frame%d' % s, base + i * 65 + s) for s in range(65)]))
     world = json.loads((ASSETS / 'world-model-manifest.json').read_text())
     for entry in world['models']:
         tile = tiles.reserve('RE_T_WORLD_' + entry['actor'].upper(), 1)
-        blocks.append(model_block(entry['model'], entry['skin'], MD3_DEF_SCALE, [('frame0', tile)]))
+        blocks.append(model_block(entry['model'], entry['skin'], md3_def_scale(), [('frame0', tile)]))
     # Model tiles need a nonzero size so sprites using them are not culled.
     tiles.reserve('RE_T_REMOVED', 1)  # runtime-spawned Duke pickups with no RE counterpart
     dummy = ['dummytilerange %d %d 64 64' % (first, tiles.next - 1)]
@@ -330,6 +330,10 @@ def write_con(tiles, tables, frames):
     lines += ['define %s %d' % (n, v) for n, v in tiles.defines]
     lines += ['define %s %d' % (n, v) for n, v in tables.constants]
     lines.append('define RE_POSE_FRAMES %d' % frames)
+    # RE units -> Build xy = 56/1800 * 8 * jill_scale = (224 * jill_scale) / 900.
+    lines.append('define RE_XY_NUM %d' % round(224 * jill_scale()))
+    lines.append('define RE_XY_DEN 900')
+    lines.append('define RE_SCALE_PCT %d' % round(100 * jill_scale()))
     lines += decl
     (GEN / 'data.con').write_text('\n'.join(lines) + '\n')
     (GEN / 'tables.con').write_text('\n'.join(load) + '\n')
@@ -365,6 +369,9 @@ def main():
     write_con(tiles, tables, frames)
     write_json(ASSETS / 'tile-allocation.json', dict(tiles.defines))
     package()
+    # Scene for the Blender layout editor (edit_layout.bat); never packaged.
+    import editor_export
+    editor_export.main()
 
 
 if __name__ == '__main__':

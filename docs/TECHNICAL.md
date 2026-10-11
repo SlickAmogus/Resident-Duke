@@ -26,7 +26,7 @@ Resident Duke keeps Resident Doom's architecture: user-supplied game data, local
 - **Fixed cameras.**
   - `tools/duke_cameras.py` splits each E1L1 sector into 4096-unit zones. For each zone it picks a static shot by testing Build `cansee()` visibility from candidate positions around it.
   - At runtime a shot is kept while it still frames Jill. The camera cuts to her zone's shot when she leaves its view, its field of view or its framing distance.
-  - Upstream hand-authored E1M1 camera zones. Per-zone overrides can be added in `tools/e1l1-cameras.json`.
+  - Upstream hand-authored E1M1 camera zones. Per-zone overrides, station placements and Jill's scale live in `tools/e1l1-layout.json`.
 - **World freeze.**
   - RE menus freeze the world. EDuke32's pause would also stop the input event that drives those menus.
   - Instead, active status lists (actors, projectiles, effectors…) are parked on unused status numbers while a menu is open.

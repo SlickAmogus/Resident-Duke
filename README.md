@@ -44,6 +44,22 @@ The controls follow the RE1 PC layout:
 - **Tab/Z/I:** status screen.
 - **Escape:** EDuke32 menu, for loading, options and quitting.
 
+## Layout editor (Blender)
+
+`edit_layout.bat` (or `python edit_layout.py`) opens E1L1 in Blender 4.x with Duke's textures. The scene contains:
+
+- every generated fixed camera shot;
+- the item box, typewriter and ink ribbon;
+- a reference Jill.
+
+To edit the layout:
+
+1. Select a camera and press Numpad 0 to see the shot.
+2. Move or rotate cameras and stations, or change *Jill scale* in the **Resident Duke** sidebar tab (press N).
+3. Press **Save and rebuild game**.
+
+Your changes are kept in `tools/e1l1-layout.json`.
+
 ## The opening
 
 Duke's way off the roof works for Jill too. Aim at the explosive charge by the air vent and shoot it from a safe distance, then walk into the opened shaft. The drop through the ductwork plays as a black RE-style room transition, and you land in the street below.

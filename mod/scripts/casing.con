@@ -124,7 +124,7 @@ defstate re_cs_show_frame
     getactorvar[re_cs_spr].re_cs_frame re_tmp mul re_tmp 4
     set re_tmp CASING_FRAME[re_tmp] add re_tmp RE_T_CASING
     setactor[re_cs_spr].picnum re_tmp
-    getactorvar[re_cs_spr].re_cs_h3 re_tmp
+    getactorvar[re_cs_spr].re_cs_h3 re_tmp mul re_tmp RE_SCALE_PCT div re_tmp 100
     setactor[re_cs_spr].xrepeat re_tmp setactor[re_cs_spr].yrepeat re_tmp
 ends
 
