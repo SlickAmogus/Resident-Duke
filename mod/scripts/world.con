@@ -69,6 +69,7 @@ ends
 define RE_CAM_KEEP_DIST 7000    // xy units beyond which a shot no longer frames Jill
 define RE_CAM_PREFER_DIST 4200  // past this, Jill's own zone shot takes over
 define RE_CAM_HALF_FOV 300      // Build angle units either side of the shot axis
+define RE_CAM_HALF_VFOV 64      // horiz units either side of the shot's tilt (~27 degrees)
 
 gamevar re_cam_want 0 0
 defstate re_camera_sees_jill  // in: re_a = camera index; out: re_result
@@ -87,6 +88,11 @@ defstate re_camera_sees_jill  // in: re_a = camera index; out: re_result
             set re_b CAM_ANG[re_a]
             getincangle re_c re_b re_d
             ifl re_c 0 mul re_c -1
+            // Vertical framing: Jill's slope from the camera, in horiz units
+            // (128 per unit tangent, z/16 per xy), within the shot's tilt.
+            set re_d re_pz sub re_d CAM_Z[re_a] mul re_d 8 set re_b re_tmp3 ifl re_b 1 set re_b 1 div re_d re_b
+            set re_b 100 sub re_b CAM_HORIZ[re_a] sub re_d re_b ifl re_d 0 mul re_d -1
+            ifg re_d RE_CAM_HALF_VFOV set re_c 9999
             ifle re_c RE_CAM_HALF_FOV
             {
                 set re_b CAM_X[re_a] set re_c CAM_Y[re_a] set re_d CAM_Z[re_a]
