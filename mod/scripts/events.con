@@ -36,7 +36,8 @@ defstate re_new_game
     set re_death_stage 0 set re_death_request 0 set re_death_blood -1
     set re_pending_pickup -1 set re_viewer_sprite -1 set re_active_typewriter -1
     set re_frozen 0 set re_cam -1 set re_music 0 set re_falling 0 set re_fall_fade 0 set re_fall_ticks 0
-    set re_raw 0 set re_prev_raw 0 set re_prevpad 0 set re_menu_prev 0
+    // Keys still held from the title confirm are not fresh presses in play.
+    set re_raw 0 set re_prev_raw 65535 set re_prevpad 65535 set re_menu_prev 1
     set re_startup_cover 3
     set re_jill -1
     setplayer[THISACTOR].max_player_health RE_MAX_HEALTH
