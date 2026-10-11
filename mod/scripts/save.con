@@ -6,6 +6,8 @@
 // small table file beside the saves; loading uses EDuke32's load menu.
 
 definequote 9600 resident-duke-typewriter.bin
+// Set once a typewriter save exists this session (EDuke32's quick-load target).
+gamevar re_session_save 0 131072
 define RE_ROWS_QUOTE 9600
 
 // Upstream CanInteractWorld(): visible, within range, similar height, in sight.
@@ -144,6 +146,7 @@ defstate re_commit_typewriter_save
         set re_save_state 0
         state re_update_freeze
         set re_save_pending 1
+        set re_session_save 1
         ife re_save_slot 0 save 0
         ife re_save_slot 1 save 1
         ife re_save_slot 2 save 2

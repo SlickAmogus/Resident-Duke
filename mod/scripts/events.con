@@ -28,6 +28,7 @@ defstate re_new_game
     setarray re_ids[0] ITEM_HANDGUN setarray re_qty[0] 15
     set re_used 1 set re_equipped 0 set re_combine_from -1 set re_examined 0
     set re_health RE_MAX_HEALTH
+    ife re_debug 2 set re_health 5   // developer: low-health start for death tests
     set re_status_open 0 set re_box_open 0 set re_prompt_kind 0 set re_viewer_item 0 set re_menu_fade_mode 0
     set re_save_state 0 set re_save_pending 0 set re_save_counter 0 set re_cache_unlocked 0
     set re_death_stage 0 set re_death_request 0 set re_death_blood -1
@@ -37,8 +38,8 @@ defstate re_new_game
     set re_startup_cover 3
     set re_jill -1
     setplayer[THISACTOR].max_player_health RE_MAX_HEALTH
-    setactor[THISACTOR].extra RE_MAX_HEALTH
-    setplayer[THISACTOR].last_extra RE_MAX_HEALTH
+    setactor[THISACTOR].extra re_health
+    setplayer[THISACTOR].last_extra re_health
     setplayer[THISACTOR].got_access 0
     setplayer[THISACTOR].horiz 100
     setuserdef .screen_size 0
@@ -68,6 +69,7 @@ endevent
 
 onevent EVENT_LOADGAME
     state re_init_tables
+    ifn re_debug 0 { set re_tmp 1 al re_tmp }
     // Upstream WorldLoaded(IsSaveGame): transient input/menu state never resumes.
     set re_save_state 0 set re_save_pending 0 set re_active_typewriter -1
     set re_raw 0 set re_prev_raw 0 set re_prevpad 0 set re_menu_prev 0 set re_cam -1
@@ -125,9 +127,15 @@ onevent EVENT_PROCESSINPUT
     ife re_death_request RE_DEATH_TITLE_NEW { set re_death_request 0 resetplayerflags 8 }
     else ife re_death_request RE_DEATH_TITLE_LOAD
     {
+        // Continue from the latest typewriter save of this session (EDuke32's
+        // quick-load slot); otherwise choose any save in EDuke32's load menu.
         set re_death_request 0
-        getplayer[THISACTOR].gm re_tmp or re_tmp 2 setplayer[THISACTOR].gm re_tmp   // MODE_MENU
-        cmenu 300                                                                   // MENU_LOAD
+        ifn re_session_save 0 resetplayerflags 4
+        else
+        {
+            getplayer[THISACTOR].gm re_tmp or re_tmp 2 setplayer[THISACTOR].gm re_tmp   // MODE_MENU
+            cmenu 300                                                                   // MENU_LOAD
+        }
     }
     // Pass Duke's "use" through only for interactions Jill delegated to it.
     ifn re_pass_open 0 { setinput[THISACTOR].bits SK_OPEN_BIT set re_pass_open 0 }
