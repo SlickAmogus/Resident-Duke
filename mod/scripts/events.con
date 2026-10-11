@@ -89,8 +89,9 @@ onevent EVENT_LOADGAME
     state re_update_freeze
 endevent
 
-// Damage before Duke sees it: monster hits are doubled (upstream mashup
-// balance), hazards unchanged, and Duke's own death/jibs never trigger.
+// Damage before Duke sees it: Duke's own amounts apply unchanged (upstream
+// doubled monster damage; Resident Duke does not), and Duke's own death and
+// jibs never trigger.
 gamevar re_dmg 0 0
 gamevar re_dmg_spr 0 0
 onevent EVENT_PREWORLD
@@ -101,13 +102,6 @@ onevent EVENT_PREWORLD
         getactor[re_dmg_spr].htextra re_dmg
         ifg re_dmg 0
         {
-            // Doubled only when a Duke enemy caused it (tile badguy flags), not explosives.
-            getactor[re_dmg_spr].htowner re_tmp
-            ifge re_tmp 0
-            {
-                getactor[re_tmp].picnum re_tmp2 gettiledata[re_tmp2].gameflags re_tmp2
-                and re_tmp2 RE_ENEMY_FLAGS ifn re_tmp2 0 mul re_dmg 2
-            }
             ife re_debug 3 set re_dmg 0   // developer: invulnerable route testing
             ife re_death_stage 0 ifg re_health 0 { sub re_health re_dmg ifl re_health 0 set re_health 0 }
             setactor[re_dmg_spr].htextra -1

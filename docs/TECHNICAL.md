@@ -37,7 +37,7 @@ Resident Duke keeps Resident Doom's architecture: user-supplied game data, local
   - Original 320x240 art is drawn with `rotatesprite` at native RE pixel coordinates, scaled uniformly and centred.
   - Tables from the decomp are loaded from generated binary arrays.
 - **Damage.**
-  - Hits from Duke enemies are doubled, matching upstream's balance for Doom monsters; hazards and explosions are unchanged.
+  - Duke's damage amounts apply unchanged. Upstream doubled Doom monster damage; Resident Duke does not.
   - Duke's own death never triggers. Jill's RE death sequence runs instead.
 - **Saves.** Typewriters write native EDuke32 saves. The eight RE rows persist in a small table file.
 
