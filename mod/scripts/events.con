@@ -184,6 +184,14 @@ endevent
 
 // No Duke HUD: weapon, crosshair, status bar, level stats.
 onevent EVENT_DISPLAYWEAPON set RETURN 1 endevent
+// Duke's first-person hands: keycard, kicks, fists, scuba mask, tips, spit.
+onevent EVENT_DISPLAYACCESS set RETURN 1 endevent
+onevent EVENT_DISPLAYKNEE set RETURN 1 endevent
+onevent EVENT_DISPLAYFIST set RETURN 1 endevent
+onevent EVENT_DISPLAYKNUCKLES set RETURN 1 endevent
+onevent EVENT_DISPLAYSCUBA set RETURN 1 endevent
+onevent EVENT_DISPLAYTIP set RETURN 1 endevent
+onevent EVENT_DISPLAYSPIT set RETURN 1 endevent
 onevent EVENT_DISPLAYCROSSHAIR set RETURN -1 endevent
 onevent EVENT_DISPLAYSBAR set RETURN 1 endevent
 onevent EVENT_DISPLAYLEVELSTATS set RETURN 1 endevent

@@ -250,6 +250,7 @@ gamevar re_pass_open 0 0
 gamevar re_near 0 0
 gamevar re_near_spr -1 0
 gamevar re_dist 0 0
+gamevar re_key_bit 0 0
 defstate re_interact
     set re_tmp 0
     ifg re_prompt_kind 0 set re_tmp 1
@@ -301,12 +302,16 @@ defstate re_interact
             {
                 // The sword key gates the red access switch; otherwise Duke's own use.
                 state re_find_key_switch
-                getplayer[THISACTOR].got_access re_tmp and re_tmp 2
-                ifge re_result 0 ife re_tmp 0 state re_use_cache
+                set re_key_switch re_result
                 set re_pass_open 1
-                ifge re_result 0
+                ifge re_key_switch 0
                 {
-                    getplayer[THISACTOR].got_access re_tmp and re_tmp 2
+                    // Access bit for this switch's palette (pal 0/21/23 = 1/2/4).
+                    getactor[re_key_switch].pal re_tmp3
+                    set re_key_bit 2 ife re_tmp3 0 set re_key_bit 1 ife re_tmp3 23 set re_key_bit 4
+                    getplayer[THISACTOR].got_access re_tmp and re_tmp re_key_bit
+                    ife re_tmp 0 state re_use_cache
+                    getplayer[THISACTOR].got_access re_tmp and re_tmp re_key_bit
                     ife re_tmp 0 set re_pass_open 0
                 }
             }

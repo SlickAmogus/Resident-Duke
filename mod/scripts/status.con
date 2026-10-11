@@ -14,8 +14,16 @@ defstate re_use_cache
         set re_cache_unlocked 1
         set re_tmp re_qty[re_result] sub re_tmp 1 ifl re_tmp 0 set re_tmp 0
         setarray re_qty[re_result] re_tmp
-        // Red access (got_access bit 2) for the original ACCESSSWITCH.
-        getplayer[THISACTOR].got_access re_tmp or re_tmp 2 setplayer[THISACTOR].got_access re_tmp
+        // Duke access for the switch Jill is at (sector.cpp: pal 0/21/23 = bit 1/2/4;
+        // E1L1's lock is the red one).
+        set re_tmp2 2
+        state re_find_key_switch
+        ifge re_result 0
+        {
+            getactor[re_result].pal re_tmp3
+            ife re_tmp3 0 set re_tmp2 1 ife re_tmp3 21 set re_tmp2 2 ife re_tmp3 23 set re_tmp2 4
+        }
+        getplayer[THISACTOR].got_access re_tmp or re_tmp re_tmp2 setplayer[THISACTOR].got_access re_tmp
         set re_a 5 set re_b -1 state re_begin_prompt
     }
 ends
