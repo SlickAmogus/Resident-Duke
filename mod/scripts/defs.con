@@ -253,5 +253,9 @@ gamevar re_pickup_qty 0 2
 gamevar re_pickup_glint -1 2
 gamevar re_actor_ready 0 2
 
-// Developer diagnostics written to eduke32.log as CONLOG lines; off in normal play.
-gamevar re_debug 1 0
+// Developer diagnostics written to eduke32.log (addlog lines); off in normal
+// play. Enabled when a file resident-duke-debug.bin (any 4+ bytes, first int
+// nonzero) sits in EDuke32's working folder: python play.py --debug creates it.
+gamevar re_debug 0 0
+gamearray re_debug_flag 1
+definequote 9602 resident-duke-debug.bin

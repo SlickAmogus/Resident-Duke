@@ -11,6 +11,6 @@ if errorlevel 1 goto missing
 python setup.py %*
 goto done
 :missing
-echo Python 3.11+ is required. Install Python from python.org, then rerun setup.bat.
+echo Python 3.12+ is required. Install Python from python.org, then rerun setup.bat.
 :done
 pause

@@ -46,6 +46,9 @@ def command(extra):
 
 
 def main():
+    args = sys.argv[1:]
+    debug = '--debug' in args
+    args = [a for a in args if a != '--debug']
     if not PACKAGE.is_file():
         print('First launch: checking your game files and preparing Resident Duke...', flush=True)
         # Setup checks all three input folders before installing/building.
@@ -56,9 +59,13 @@ def main():
     if not EXE.is_file(): raise RuntimeError('Missing EDuke32; unpack it into dependencies/eduke32/')
     if not GRP.is_file(): raise RuntimeError('Missing dependencies/duke3d/duke3d.grp')
     prepare_runtime()
+    # Developer trace (CON addlog lines in build/runtime/eduke32.log).
+    marker = RUNTIME / 'resident-duke-debug.bin'
+    if debug: marker.write_bytes(bytes([1, 0, 0, 0]))
+    else: marker.unlink(missing_ok=True)
     print('Starting Resident Duke...', flush=True)
     with (ROOT / 'logs/launch.log').open('w') as log:
-        result = subprocess.run(command(sys.argv[1:]), cwd=RUNTIME, stdout=log, stderr=subprocess.STDOUT)
+        result = subprocess.run(command(args), cwd=RUNTIME, stdout=log, stderr=subprocess.STDOUT)
     if result.returncode: raise RuntimeError('EDuke32 exited with an error; see logs/launch.log and build/runtime/eduke32.log')
     return 0
 

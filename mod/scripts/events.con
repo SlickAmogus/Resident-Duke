@@ -12,6 +12,9 @@ gamevar re_title_pending 1 131072   // GAMEVAR_NORESET
 
 defstate re_init_tables
     state re_load_tables
+    setarray re_debug_flag[0] 0
+    readarrayfromfile re_debug_flag 9602
+    set re_debug re_debug_flag[0]
     state re_park_init
     state re_init_pad_remap
     state re_init_pickup_kinds

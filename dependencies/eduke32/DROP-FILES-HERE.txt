@@ -1,0 +1,1 @@
+Unpack a Windows EDuke32 build here so that eduke32.exe sits directly in this folder (Linux: the eduke32 binary). Tested with EDuke32 r10652; the OpenGL (Polymost) renderer is required. Source and builds: https://www.eduke32.com/

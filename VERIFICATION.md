@@ -1,14 +1,23 @@
-# Release preparation checks
+# Verification notes
 
-- Linux: ordinary setup created its own virtual environment, installed dependencies locally, imported all 53 required classic USA assets, and built the full PK3.
-- GOG: the supported original offline installer pair was extracted without running the game installer; the generated build completed.
-- Copied/installed data: nested wrapper folder and lowercase USA layout imported successfully. Copied CD contents use this same data-layout path; no physical retail CD was tested.
-- ISO: a locally generated standard ISO/Joliet test image containing user-owned input files was read without mounting; all 53 extracted file hashes matched. No actual retail ISO or unusual edition was tested.
-- Scope: input-folder symlinks pointing outside the folder were ignored; root-folder links are rejected. No registry/store/system discovery exists.
-- Linux runtime: the independent generated package passed GZDoom 4.14.2 script compilation, and the release launcher reached E1M1 in an offscreen smoke check. The Doom IWAD remained byte-identical. No full playthrough/visual/audio regression was performed for release preparation.
-- Windows: Python source compiles and launcher/path handling was inspected; neither complete Windows setup nor native Windows gameplay was tested.
-- Publication: only source/text, instructions, notices and filename/hash-based dependency metadata are intended for Git. The generated PK3 and all proprietary/converted data are excluded.
+Checked on Windows 11 with EDuke32 r10652 (32-bit, OpenGL/Polymost), the GOG classic RE1 USA data and an Atomic-era `duke3d.grp`:
 
-Current simplification: setup accepts installed files only. Earlier GOG/ISO checks above are historical evidence, not supported current input paths. Those formats and their extra dependencies were removed from the normal flow.
+- **Setup:** setup imported all 53 required RE1 files, converted them, generated E1L1 and 500 zone cameras, and packaged the mod.
+- **Compilation:** the CON compiles with 0 errors, and `tools/con_lint.py` reports no scratch-variable clobbers.
+- **Title and start:** the RE1 title screen appears, then Jill starts on the E1L1 rooftop in a fixed camera shot.
+- **Movement:** tank movement and turning run at RE speeds. Jill's model faces her heading and holds the Beretta in her right hand.
+- **Pickups and saving:** the ink ribbon pickup shows the 3D item view and the original prompt. The typewriter flow spends a ribbon, writes a native save and plays the row reveal; typewriter rows persist between launches.
+- **Menus:** the status screen and the item box store and retrieve items.
+- **Opening route:** shooting the rooftop charge opens the vent, and the shaft drop teleports Jill to the street.
+- **Combat:** the aim/fire behaviours killed an Assault Trooper with handgun fire.
+- **Death:** lethal damage plays the RE death sequence (flash, YOU DIED) and returns to the title.
 
-One-step Play flow: tested on Linux using a separate disposable source copy and real owned-data conversion/build, with a test runtime marker for launch ordering. First Play built the PK3 and launched once; repeat Play skipped setup even after the fixture's RE1 inputs were removed; missing first-time inputs stopped with a clear error and no runtime launch. Native Windows execution remains untested.
+Not yet exercised end to end:
+
+- **Sword key:** the sword key on the red access switch.
+- **Shotgun:** its reload and shell casings.
+- **Herbs:** herb mixing.
+- **Continue:** loading from the death screen's *Continue*.
+- **Music:** switching between the two RE tracks.
+- **Linux:** Linux launching.
+- **Full playthrough:** a full playthrough of E1L1.

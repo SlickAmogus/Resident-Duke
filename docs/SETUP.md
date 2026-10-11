@@ -2,19 +2,29 @@
 
 ## Before you start
 
-Download the project ZIP and extract it into a writable folder. You need your own registered Doom / Ultimate Doom, the **original classic USA Resident Evil 1 PC** game, the complete **GZDoom 4.14.2** distribution, and **Python 3.12+** with pip/venv support. Windows users should install the Python launcher if offered. The RE1 HD Remaster and other-language/console editions are not supported.
+Download the project ZIP and extract it into a writable folder. You need:
 
-First setup needs internet access. It downloads a checksum-pinned source reference and installs NumPy/Pillow into a virtual environment inside this project. It does not install software system-wide.
+- your own registered or Atomic **Duke Nukem 3D** GRP;
+- the **original classic USA Resident Evil 1 PC** game;
+- an **EDuke32** build;
+- **Python 3.12+** with pip/venv support. Windows users should install the Python launcher if offered.
+
+The RE1 HD Remaster and other-language/console editions are not supported.
+
+First setup needs internet access. It downloads a checksum-pinned RE1 decomp source reference, and installs NumPy and Pillow into a virtual environment inside this project. It does not install software system-wide.
 
 ## The three drop folders
 
-- **`dependencies/doom/doom.wad`**: your registered Doom / Ultimate Doom IWAD, named exactly `doom.wad` (lowercase on Linux). Doom II, shareware and Freedoom are not supported. The original IWAD is never edited.
-- **`dependencies/re1/`**: install Resident Evil 1 normally, then copy or drag the installed game files here. The game folder can contain `USA/`, or you can copy the contents of `USA/`; a copied install folder containing those files is also recognized. Filenames are matched case-insensitively.
-- **`dependencies/gzdoom/`**: unpack the complete GZDoom distribution here. Keep its support files, including `gzdoom.pk3`, beside `gzdoom.exe` on Windows or `gzdoom` on Linux. On Linux, GZDoom's usual runtime libraries must be available.
+- **`dependencies/duke3d/duke3d.grp`**: your Duke Nukem 3D GRP. It must contain `E1L1.MAP`, `GAME.CON`, `DEFS.CON` and `USER.CON`; shareware lacks these. The GRP is only read. The playable map is generated from it into the local package.
+- **`dependencies/re1/`**: install Resident Evil 1 normally, then copy or drag the installed game files here.
+  - The folder can contain `USA/`, or the contents of `USA/`.
+  - Filenames are matched case-insensitively.
+  - Only this folder is inspected.
+- **`dependencies/eduke32/`**: unpack an EDuke32 build here so that `eduke32.exe` (Linux: `eduke32`) sits directly in the folder.
+  - Tested with r10652.
+  - The OpenGL renderer (Polymost, EDuke32's default) is required, because Jill and the RE items are 3D models.
 
-Setup inspects **only the RE1 drop folder** and does not follow links outside it. It does not search your system, registry, Steam/GOG installations or accounts. Keep one complete installed game copy in that folder. Installers, ISOs and packed disc files are not accepted by the current setup.
-
-Setup imports only the [53 required files](../tools/required-assets.json), then builds the local playable package. No original game content is included in the download.
+Setup imports only the [53 required RE1 files](../tools/required-assets.json), converts them, generates the E1L1 variant and its camera tables, and packages `build/resident-duke.zip`. Converting and choosing cameras takes a few minutes.
 
 ## Run
 
@@ -22,20 +32,28 @@ Setup imports only the [53 required files](../tools/required-assets.json), then 
 
 **Linux:** open a terminal in the project folder and run `sh play.sh`.
 
-On first launch, Play checks the three input folders, runs local setup/build, and then starts the game. If `build/doom-re1.pk3` already exists, it launches immediately without inspecting RE1 files or reinstalling dependencies. The internal `setup.py` and setup wrappers are retained for rebuilding/troubleshooting, but are not required for normal use.
+EDuke32 runs with its configuration, saves and logs inside `build/runtime/`. The first run opens a 1280x720 window; change the resolution or switch to fullscreen in EDuke32's options. Key bindings are reapplied from `controls.cfg` at every launch.
 
-## Updating an existing copy
+`python play.py --debug` additionally writes a developer trace (position, input and behaviour state) to `build/runtime/eduke32.log`.
 
-Extract the current release into a fresh folder and copy your three dependency folders into it. Play will build the updated game automatically. Simply overwriting source files leaves an older cached PK3 unchanged.
+## Saving and loading
+
+Saving is done at typewriters only and spends one ink ribbon, as in RE1. The native save menu refuses with "Use a typewriter to save."
+
+Each typewriter save writes an ordinary EDuke32 save. Load it from EDuke32's menu (Escape, then Load Game), or choose *Continue* on the death screen. The eight typewriter rows and their counters are kept in `build/runtime/resident-duke-typewriter.bin`.
+
+## Rebuilding
+
+- **Repackage after editing scripts:** `python setup.py --build-only` repackages from the existing converted assets.
+- **Full conversion:** `python setup.py` reruns the whole conversion.
+- **Checking scripts:** `python tools/con_lint.py` checks the CON scripts for shared scratch variables that a nested state call could overwrite.
 
 ## If something is missing
 
-- **Missing Doom file:** place your IWAD at `dependencies/doom/doom.wad`.
-- **Missing GZDoom:** put the executable and the rest of its distribution inside `dependencies/gzdoom/`, rather than an extra enclosing folder.
-- **Missing RE1 file:** copy the entire installed classic PC game folder into `dependencies/re1/`, keeping its subfolders. The error names a required file. An installer, ISO or HD Remaster does not contain the supported installed layout.
-- **Multiple complete RE1 datasets:** keep just one installed copy in the input folder.
+- **Missing GRP:** place `duke3d.grp` in `dependencies/duke3d/`.
+- **Missing EDuke32:** put `eduke32.exe` and its DLLs directly in `dependencies/eduke32/`.
+- **Missing RE1 file:** copy the entire installed classic PC game folder into `dependencies/re1/`. The error names the missing file.
 - **Python missing:** install Python 3.12+ with pip/venv support, then run Play again.
-- **Download or dependency error:** check your connection and run Play again. Local generated files are ignored by Git.
-- **Game launch error:** see `logs/launch.log`. Config, logs and saves stay inside the project.
+- **Game launch error:** see `logs/launch.log` and `build/runtime/eduke32.log`.
 
-Windows launchers have been reviewed but native Windows setup/gameplay has not been tested. Do not redistribute the generated PK3 or imported game data. See [technical information](TECHNICAL.md) and [licenses/credits](LICENSES.md).
+Do not redistribute the generated package or imported game data.

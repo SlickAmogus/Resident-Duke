@@ -1,0 +1,1 @@
+Put your registered/Atomic Duke Nukem 3D duke3d.grp in this folder. The GRP is only read, never modified. Shareware is not supported (it lacks E1L1 game data the slice needs).

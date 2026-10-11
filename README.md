@@ -1,50 +1,57 @@
-# Resident Doom
+# Resident Duke
 
-Drelvak’s Resident Evil 1 × Doom experiment: play as Jill inside Doom, with exact mechanics ported over directly from source code taken from [RE1 Decomp](https://github.com/ecruells/resident-evil-pc-decomp). Limited saves, typewriters, storage boxes, inventory, it's all there.
+A fork of Drelvak's [Resident Doom](https://github.com/Drelvak/Resident-Doom) that puts Resident Evil 1's Jill Valentine and RE1 PC gameplay inside **Duke Nukem 3D**, running on **EDuke32**. You start on the rooftop of E1L1 *Hollywood Holocaust*, exactly where Duke does.
 
-**[Watch the original video](https://youtu.be/yGkjS0gFxnY)**
+The RE1 mechanics are ported from Resident Doom's ZScript, which adapts the [RE1 PC decomp](https://github.com/ecruells/resident-evil-pc-decomp), into EDuke32's CON scripting. You get:
 
-
-
-
-
-
-<img width="800" height="450" alt="redoom_800_30fps" src="https://github.com/user-attachments/assets/414e96f8-f0b1-441c-b19c-f22dcfa19cf7" />
-
-
-
-
-
+- tank controls;
+- fixed camera angles;
+- the original status screen, item box and item viewer;
+- limited saves at typewriters with ink ribbons;
+- herb mixing;
+- Jill's original model and animations;
+- the original death and title screens.
 
 ## What you need
 
-- Doom
-- Resident Evil 1 PC (tested using GoG version, other PC versions untested but probably works)
-- [GZDoom](https://zdoom.org/downloads)
+- Duke Nukem 3D: the registered or Atomic `duke3d.grp`.
+- Resident Evil 1 PC, the classic USA release. Only the GOG version has been tested.
+- [EDuke32](https://www.eduke32.com/), tested with r10652 for Windows.
+- Python 3.12+.
 
 ## Setup
 
 Download and extract this project, then:
 
-1. Put your **`doom.wad`** in **`dependencies/doom/`**.
-2. **Install Resident Evil 1 normally, then drag the installed game files into `dependencies/re1/`.**
-3. Put the complete GZDoom download in **`dependencies/gzdoom/`**.
+1. Put your **`duke3d.grp`** in **`dependencies/duke3d/`**.
+2. **Install Resident Evil 1 normally, then copy the installed game files into `dependencies/re1/`.**
+3. Unpack EDuke32 so that **`eduke32.exe`** sits in **`dependencies/eduke32/`**.
 
-**Windows:** Double-click `play.bat`.
+**Windows:** double-click `play.bat`.
 
-**Linux:** Run `sh play.sh`.
+**Linux:** run `sh play.sh`.
 
-The first launch prepares the game automatically. Later launches start immediately.
+The first launch converts your game files locally, which takes a few minutes. Later launches start immediately.
 
 ## Controls
 
-Controls are the same as RE1 PC.
+The controls follow the RE1 PC layout:
 
-**Arrows/WASD:** move and turn · **V/Shift:** run/cancel · **X:** aim · **C/Space:** interact/fire/confirm · **Escape/TAB:** inventory
+- **Arrows/WASD:** move and turn.
+- **X:** aim.
+- **C/Space/Enter:** interact, fire or confirm.
+- **V/Shift:** run or cancel.
+- **Tab/Z/I:** status screen.
+- **Escape:** EDuke32 menu, for loading, options and quitting.
+
+## The opening
+
+Duke's way off the roof works for Jill too. Aim at the explosive charge by the air vent and shoot it from a safe distance, then walk into the opened shaft. The drop through the ductwork plays as a black RE-style room transition, and you land in the street below.
 
 ## Limitations
 
-One experimental map: E1M1. Windows gameplay is not yet tested, developed on Arch Linux. Original game files are required and are not included. You must provide your own legally obtained copies.
-The rest of the levels, at least the entire shareware episode, may be finished in the future. Currently a proof of concept prototype.
+- **One level:** only E1L1 is supported, and finishing it starts E1L1 again, as upstream loops E1M1.
+- **Generated cameras:** cameras are computed from the map's geometry rather than hand-placed.
+- **Your own data:** original game files are required and are not included. You must provide your own legally obtained copies.
 
 [Setup & troubleshooting](docs/SETUP.md) · [Technical information](docs/TECHNICAL.md) · [Licenses & credits](docs/LICENSES.md) · [Contributing](CONTRIBUTING.md)
