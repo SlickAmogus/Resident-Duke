@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Carried inventory (8 slots), storage transfers and reload stacks.
 
+gamevar re_fi 0 0
 // Upstream FindItem(). in: re_a = id. out: re_result = slot or -1.
 defstate re_find_item
     set re_result -1
-    for re_tmp range re_used
+    for re_fi range re_used
     {
-        ifl re_result 0 { ife re_ids[re_tmp] re_a set re_result re_tmp }
+        ifl re_result 0 { ife re_ids[re_fi] re_a set re_result re_fi }
     }
 ends
 

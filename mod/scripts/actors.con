@@ -77,27 +77,33 @@ defstate re_glint_actor
     setactorvar[THISACTOR].re_gl_phase re_b
 ends
 
+// Pickup setup at spawn (map load or runtime): RE item, quantity and glint.
+// Pickups stay in the active status list; Duke would otherwise leave items it
+// considers out of sight asleep, where neither their code nor searches run.
+defstate re_pickup_init
+    set re_actor_ready 1
+    getactor[THISACTOR].lotag re_a
+    ifl re_a 0 set re_a 0 ifg re_a 5 set re_a 5
+    // Runtime spawns carry no lotag: derive the kind from the model tile.
+    getactor[THISACTOR].picnum re_tmp2
+    ife re_a 0 { for re_tmp range 6 { ife PICKUP_TILE[re_tmp] re_tmp2 set re_a re_tmp } }
+    set re_pickup_id re_kind_item[re_a]
+    set re_pickup_qty re_kind_qty[re_a]
+    cstat 0
+    sizeat 64 64
+    changespritestat THISACTOR 1
+    espawn RE_T_GLINT
+    set re_pickup_glint RETURN
+    setactor[RETURN].owner THISACTOR
+    setactor[RETURN].cstat 32768
+    setactor[RETURN].xrepeat 16
+    setactor[RETURN].yrepeat 16
+    setactor[RETURN].shade -16
+    changespritestat RETURN 1
+ends
+
 defstate re_pickup_actor
-    ife re_actor_ready 0
-    {
-        set re_actor_ready 1
-        getactor[THISACTOR].lotag re_a
-        ifl re_a 0 set re_a 0 ifg re_a 5 set re_a 5
-        // Runtime spawns carry no lotag: derive the kind from the model tile.
-        getactor[THISACTOR].picnum re_tmp2
-        ife re_a 0 { for re_tmp range 6 { ife PICKUP_TILE[re_tmp] re_tmp2 set re_a re_tmp } }
-        set re_pickup_id re_kind_item[re_a]
-        set re_pickup_qty re_kind_qty[re_a]
-        cstat 0
-        sizeat 64 64
-        espawn RE_T_GLINT
-        set re_pickup_glint RETURN
-        setactor[RETURN].owner THISACTOR
-        setactor[RETURN].cstat 32768
-        setactor[RETURN].xrepeat 16
-        setactor[RETURN].yrepeat 16
-        setactor[RETURN].shade -16
-    }
+    ife re_actor_ready 0 state re_pickup_init
     ife re_pickup_id 0 killit
     // Pickups rest on the floor and never move (upstream REPickup.Tick).
     getactor[THISACTOR].htfloorz re_tmp

@@ -124,6 +124,16 @@ onevent EVENT_PROCESSINPUT
     // Pass Duke's "use" through only for interactions Jill delegated to it.
     ifn re_pass_open 0 { setinput[THISACTOR].bits SK_OPEN_BIT set re_pass_open 0 }
     state re_update_fall
+    // Developer trace (re_debug): once a second.
+    ifn re_debug 0
+    {
+        set re_tmp re_ticks mod re_tmp 30
+        ife re_tmp 0
+        {
+            getplayer[THISACTOR].posx re_a getplayer[THISACTOR].posy re_b getplayer[THISACTOR].ang re_c
+            al re_raw al re_behavior al re_a al re_b al re_c al re_cam al re_jill al re_death_stage al re_shown_frame
+        }
+    }
     // Camera: Jill's position, mid-body height and sector.
     ife re_death_stage 0
     {
@@ -185,7 +195,22 @@ onevent EVENT_EGS
     }
 endevent
 
+// Pickups are set up as they spawn (map load and runtime drops alike).
+onevent EVENT_SPAWN
+    getactor[THISACTOR].picnum re_tmp
+    set re_tmp2 0
+    for re_i range 6 { ife PICKUP_TILE[re_i] re_tmp set re_tmp2 1 }
+    ifn re_tmp2 0 ife re_actor_ready 0 state re_pickup_init
+endevent
+
 // Saving is the typewriter's job (upstream RETypewriterOnlyMenu).
 onevent EVENT_CHANGEMENU
     ife RETURN MENU_SAVE_ID { set RETURN MENU_CLOSE_ID quote RE_QUOTE_SAVE_ONLY }
+endevent
+
+// Duke turns the local view every rendered frame from the turn keys, before
+// the game tic. Jill's heading is set only by her own fixed RE increments.
+onevent EVENT_PREUPDATEANGLES
+    setinput[THISACTOR].q16avel 0
+    setinput[THISACTOR].q16horz 0
 endevent

@@ -254,4 +254,4 @@ gamevar re_pickup_glint -1 2
 gamevar re_actor_ready 0 2
 
 // Developer diagnostics written to eduke32.log as CONLOG lines; off in normal play.
-gamevar re_debug 0 0
+gamevar re_debug 1 0

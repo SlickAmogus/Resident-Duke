@@ -74,6 +74,63 @@ class Sight:
         return s2 in seen
 
 
+CELL = 4096               # zone grid for large sectors (xy units)
+FRAME_DIST = 2800         # preferred camera-to-zone-centre distance
+
+
+def zone_grid(m, s):
+    pts = [m.wall_segment(w)[0] for w in m.sector_walls(s)]
+    x0 = min(p[0] for p in pts); y0 = min(p[1] for p in pts)
+    cols = max(1, -(-(max(p[0] for p in pts) - x0) // CELL))
+    rows = max(1, -(-(max(p[1] for p in pts) - y0) // CELL))
+    return x0, y0, cols, rows
+
+
+def zone_samples(m, s, x0, y0, col, row, count=4):
+    out = []
+    for i in range(count):
+        for j in range(count):
+            x = int(x0 + (col + (i + .5) / count) * CELL); y = int(y0 + (row + (j + .5) / count) * CELL)
+            if m.inside(x, y, s):
+                out.append((x, y))
+    return out
+
+
+def zone_candidates(m, s, cx, cy):
+    out = []
+    for k in range(16):
+        a = k * math.pi / 8
+        for d in (FRAME_DIST * .7, FRAME_DIST, FRAME_DIST * 1.4):
+            out.append((cx + math.cos(a) * d, cy + math.sin(a) * d))
+    for w in m.sector_walls(s):
+        (x, y), _ = m.wall_segment(w)
+        if math.hypot(x - cx, y - cy) < FRAME_DIST * 2.2:
+            dx, dy = cx - x, cy - y; d = math.hypot(dx, dy) or 1
+            out.append((x + dx / d * 256, y + dy / d * 256))
+    return out
+
+
+def choose_zone(m, sight, s, samples):
+    targets = [(x, y, m.floor_z(s, x, y) - JILL_MID) for x, y in samples]
+    cx = sum(t[0] for t in targets) / len(targets); cy = sum(t[1] for t in targets) / len(targets)
+    best = None
+    for px, py in zone_candidates(m, s, cx, cy):
+        cs = m.find_sector(int(px), int(py), s)
+        if cs < 0:
+            continue
+        cz = camera_z(m, cs, px, py)
+        visible = [t for t in targets if sight.cansee(int(px), int(py), cz, cs, t[0], t[1], int(t[2]), s)]
+        if not visible:
+            continue
+        dist = math.hypot(px - cx, py - cy)
+        score = len(visible) / len(targets) * 10 - abs(dist - FRAME_DIST) / FRAME_DIST * 2 + (0.5 if cs == s else 0)
+        if best is None or score > best[0]:
+            lx = sum(t[0] for t in visible) / len(visible); ly = sum(t[1] for t in visible) / len(visible)
+            lz = sum(t[2] for t in visible) / len(visible)
+            best = (score, px, py, cz, cs, lx, ly, lz)
+    return best
+
+
 def polygon_samples(m, s, count=5):
     """Interior sample points on a grid over the sector's bounding box."""
     pts = [m.wall_segment(w)[0] for w in m.sector_walls(s)]
@@ -139,24 +196,40 @@ def orient(x, y, z, look):
 
 
 def generate(m, sector_count, overrides_path):
+    """One camera per zone; zones are CELL-sized grid cells of each sector."""
     sight = Sight(m)
     overrides = json.loads(overrides_path.read_text()) if overrides_path.exists() else {}
-    cameras = []; sector_camera = []
+    cameras = []; zones = []; sector_zone = []
     for s in range(sector_count):
-        o = overrides.get(str(s))
-        if o:
-            x, y, z = o['x'], o['y'], o['z']; look = tuple(o['look'])
-            cs = m.find_sector(x, y, s)
-        else:
+        x0, y0, cols, rows = zone_grid(m, s)
+        sector_zone.append(dict(start=len(zones), x0=x0, y0=y0, cols=cols, rows=rows))
+        fallback = None
+        for row in range(rows):
+            for col in range(cols):
+                key = '%d:%d:%d' % (s, col, row)
+                o = overrides.get(key) or (overrides.get(str(s)) if cols * rows == 1 else None)
+                samples = zone_samples(m, s, x0, y0, col, row)
+                best = None
+                if o:
+                    best = (0, o['x'], o['y'], o['z'], m.find_sector(o['x'], o['y'], s), *o['look'])
+                elif samples:
+                    best = choose_zone(m, sight, s, samples)
+                if best is None:
+                    zones.append(-1); continue
+                _, x, y, z, cs, lx, ly, lz = best
+                ang, horiz = orient(x, y, z, (lx, ly, lz))
+                zones.append(len(cameras)); fallback = len(cameras)
+                cameras.append(dict(x=int(x), y=int(y), z=int(z), ang=ang, horiz=horiz, sect=int(cs), sector=s,
+                                    zone=[col, row]))
+        if fallback is None:  # tiny/sealed sector: whole-sector search
             best = choose(m, sight, s)
-            if best is None:  # no usable view (e.g. zero-height or sealed sector)
-                cx, cy = m.centroid(s)
-                x, y = int(cx), int(cy); cs = s
-                z = camera_z(m, s, x, y) if m.inside(x, y, s) else int(m.floor_z(s, x, y) - CAMERA_RISE)
-                look = (x + 1, y, m.floor_z(s, x, y))
-            else:
-                _, x, y, z, cs, lx, ly, lz = best; look = (lx, ly, lz)
-        ang, horiz = orient(x, y, z, look)
-        sector_camera.append(len(cameras))
-        cameras.append(dict(x=int(x), y=int(y), z=int(z), ang=ang, horiz=horiz, sect=int(cs), sector=s))
-    return dict(cameras=cameras, sector_camera=sector_camera)
+            if best is None:
+                cx, cy = m.centroid(s); best = (0, cx, cy, int(m.floor_z(s, cx, cy) - CAMERA_RISE), s, cx + 1, cy, m.floor_z(s, cx, cy))
+            _, x, y, z, cs, lx, ly, lz = best
+            ang, horiz = orient(x, y, z, (lx, ly, lz))
+            fallback = len(cameras)
+            cameras.append(dict(x=int(x), y=int(y), z=int(z), ang=ang, horiz=horiz, sect=int(cs), sector=s, zone=None))
+        st = sector_zone[-1]['start']
+        for k in range(st, len(zones)):
+            if zones[k] < 0: zones[k] = fallback
+    return dict(cameras=cameras, zones=zones, sector_zone=sector_zone)

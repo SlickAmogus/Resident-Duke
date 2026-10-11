@@ -134,8 +134,9 @@ ends
 gamevar re_fill_alpha 0 0
 defstate re_fill
     set re_fill_alpha re_art_alpha
-    set re_tmp xdim shiftl re_tmp 17 div re_tmp 64   // two screens wide at 64 px
-    rotatespritea 0 0 re_tmp 0 re_art_tile 0 0 1048 re_fill_alpha 0 0 xdim ydim
+    set re_tmp xdim sub re_tmp 1 set re_tmp2 ydim sub re_tmp2 1
+    // A 64 px tile at 40x zoom, centred, clipped to the whole window.
+    rotatespritea 160 100 2621440 0 re_art_tile 0 0 8 re_fill_alpha 0 0 re_tmp re_tmp2
     set re_art_alpha 0
 ends
 

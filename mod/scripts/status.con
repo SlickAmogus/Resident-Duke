@@ -20,20 +20,19 @@ defstate re_use_cache
     }
 ends
 
+gamevar re_pk_id 0 0
+gamevar re_pk_spr -1 0
 // ---- Pickups --------------------------------------------------------------------
 // Upstream BeginPickup(item). in: re_a = pickup sprite.
 defstate re_begin_pickup
     set re_pending_pickup re_a
-    set re_tmp re_a
     set re_a RE_SND_DECIDE state re_sound
-    getactorvar[re_tmp].re_pickup_id re_a
-    getactorvar[re_tmp].re_pickup_qty re_b
-    state re_can_add_item
-    set re_c re_result
-    getactorvar[re_tmp].re_pickup_id re_d
-    ife re_c 0 { set re_a 2 set re_b RE_STR_CANT_CARRY state re_begin_prompt }
+    getactorvar[re_pending_pickup].re_pickup_id re_pk_id
+    getactorvar[re_pending_pickup].re_pickup_qty re_b
+    set re_a re_pk_id state re_can_add_item
+    ife re_result 0 { set re_a 2 set re_b RE_STR_CANT_CARRY state re_begin_prompt }
     else { set re_a 1 set re_b -1 state re_begin_prompt }
-    set re_a re_d set re_b 2 state re_start_item_view
+    set re_a re_pk_id set re_b 2 state re_start_item_view
 ends
 
 // ---- Item box -------------------------------------------------------------------
@@ -286,8 +285,8 @@ defstate re_combine_selected
                 ife re_tmp ITEM_HANDGUN ife re_tmp2 ITEM_CLIP { set re_i re_c set re_j re_d }
                 ife re_tmp ITEM_SHOTGUN ife re_tmp2 ITEM_SHELLS { set re_i re_c set re_j re_d }
                 ife re_tmp2 ITEM_HANDGUN ife re_tmp ITEM_CLIP { set re_i re_d set re_j re_c }
-                ife re_tmp2 ITEM_SHOTGUN ife re_tmp ITEM_SHELLS { set re_i re_d set re_j re_c }
-                ifl re_k 0 set re_i -1
+                ife re_tmp2 ITEM_SHOTGUN ife re_tmp ITEM_SHELLS { set re_i re_d set re_j re_c }  // lint: ok
+                ifl re_k 0 set re_i -1  // lint: ok
                 ifge re_i 0
                 {
                     set re_a 15 ife re_ids[re_i] ITEM_SHOTGUN set re_a 7
@@ -302,7 +301,7 @@ defstate re_combine_selected
                     // Same ammo type: merge stacks up to 250.
                     set re_tmp 0
                     ife re_ids[re_c] re_ids[re_d] { ife re_ids[re_c] ITEM_CLIP set re_tmp 1 ife re_ids[re_c] ITEM_SHELLS set re_tmp 1 }
-                    ifl re_k 0 set re_tmp 0
+                    ifl re_k 0 set re_tmp 0  // lint: ok
                     ifn re_tmp 0
                     {
                         set re_a 250 sub re_a re_qty[re_d]
@@ -338,26 +337,26 @@ defstate re_confirm_prompt
     set re_confirm_kind re_prompt_kind set re_prompt_kind 0 set re_source_prompt 0
     ife re_confirm_kind 1
     {
-        set re_k re_pending_pickup set re_pending_pickup -1
-        ife re_choice 0 ifge re_k 0
+        set re_pk_spr re_pending_pickup set re_pending_pickup -1
+        ife re_choice 0 ifge re_pk_spr 0
         {
-            getactorvar[re_k].re_pickup_id re_a getactorvar[re_k].re_pickup_qty re_b
+            getactorvar[re_pk_spr].re_pickup_id re_a getactorvar[re_pk_spr].re_pickup_qty re_b
             state re_can_add_item
             ife re_result 0
             {
-                set re_pending_pickup re_k
+                set re_pending_pickup re_pk_spr
                 set re_a 2 set re_b RE_STR_CANT_CARRY state re_begin_prompt
-                getactorvar[re_k].re_pickup_id re_a set re_b 2 state re_start_item_view
+                getactorvar[re_pk_spr].re_pickup_id re_a set re_b 2 state re_start_item_view
             }
             else
             {
-                getactorvar[re_k].re_pickup_id re_a getactorvar[re_k].re_pickup_qty re_b
+                getactorvar[re_pk_spr].re_pickup_id re_a getactorvar[re_pk_spr].re_pickup_qty re_b
                 state re_add_item
                 ifn re_result 0
                 {
                     // Taken: hide the world pickup and its glint.
-                    setactor[re_k].cstat 32768 setactorvar[re_k].re_pickup_id 0
-                    getactorvar[re_k].re_pickup_glint re_tmp
+                    setactor[re_pk_spr].cstat 32768 setactorvar[re_pk_spr].re_pickup_id 0
+                    getactorvar[re_pk_spr].re_pickup_glint re_tmp
                     ifge re_tmp 0 setactor[re_tmp].cstat 32768
                 }
             }

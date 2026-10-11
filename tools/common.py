@@ -45,7 +45,11 @@ def rgb555(values, transparent_zero=True):
 
 
 def write_md3(path, name, points, uv, triangles, frames, skin, frame_bounds=256.0):
-    """Write a single-surface MD3. Vertices are model units; the format stores x64."""
+    """Write a single-surface MD3. Vertices are model units; the format stores x64.
+
+    Triangles are double-sided. Item meshes keep upstream's axes: their
+    original labels read correctly in EDuke32 as they are.
+    """
     n = len(points); nt = len(triangles); nf = len(frames)
     ot = 108; os_ = ot + nt * 12; ost = os_ + 68; ox = ost + n * 8; end = ox + nf * n * 8
     surf = bytearray(struct.pack('<4s64s10i', b'IDP3', name.encode()[:63], 0, nf, 1, n, nt, ot, os_, ost, ox, end))

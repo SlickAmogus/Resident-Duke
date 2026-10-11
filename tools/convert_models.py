@@ -59,7 +59,8 @@ def mesh(b,base,j):
  return np.array(points),np.array(normal),uv,triangles
 body=[mesh(emd,tmd,j) for j in range(joints)];weapon=mesh(w12,u32(w12,len(w12)-4),0);shotgun=mesh(w13,u32(w13,len(w13)-4),0)
 assert not np.array_equal(body[14][0],weapon[0])
-def coord(v,scale):return np.stack((v[:,0],-v[:,2],-v[:,1]),axis=1)*scale
+# GZDoom axes (x forward, y left, z up) mirrored on y for Build's south-pointing y axis.
+def coord(v,scale):return np.stack((v[:,0],v[:,2],-v[:,1]),axis=1)*scale
 for armed,name in [(True,'jill.md3'),(False,'jill-unarmed.md3'),(True,'jill-shotgun.md3')]:
  surfaces=[];bounds=[];nf=len(poses)
  for j in range(joints):

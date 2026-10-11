@@ -11,6 +11,9 @@ gamevar re_ov_id 0 0
 gamevar re_ov_qty 0 0
 gamevar re_ov_preview 0 0
 gamevar re_ov_drawn 0 0
+gamevar re_ov_more 0 0
+gamevar re_ov_show 0 0
+gamevar re_ov_source 0 0
 
 // Full-screen colour wash. in: re_a = strength 0..32767, re_b = 0 black / 1 white.
 defstate re_ov_wash
@@ -369,10 +372,11 @@ defstate re_ov_status
         set re_art_x 84 set re_art_y 146 state re_art
     }
     ifn re_box_open 0 state re_ov_box
-    set re_tmp 1
+    // re_ov_more: 1 while the status/box layer (cursor, actions, name) still draws.
+    set re_ov_more 1
     ifg re_viewer_item 0 ife re_viewer_mode 1
     {
-        set re_tmp 0
+        set re_ov_more 0
         ifn re_viewer_description 0 state re_ov_message
         else
         {
@@ -380,15 +384,15 @@ defstate re_ov_status
             set re_text_x 48 set re_text_y 186 set re_a re_result state re_ov_text
         }
     }
-    ifn re_tmp 0 ifg re_prompt_kind 0
+    ifn re_ov_more 0 ifg re_prompt_kind 0
     {
-        set re_tmp 0
-        set re_tmp2 1
-        ifg re_viewer_item 0 { ifl re_viewer_step 64 set re_tmp2 0 ifn re_viewer_exiting 0 set re_tmp2 0 }
-        ifn re_tmp2 0
+        set re_ov_more 0
+        set re_ov_show 1
+        ifg re_viewer_item 0 { ifl re_viewer_step 64 set re_ov_show 0 ifn re_viewer_exiting 0 set re_ov_show 0 }
+        ifn re_ov_show 0
         {
-            set re_tmp3 0 ifg re_viewer_item 0 set re_tmp3 1 ifn re_source_prompt 0 set re_tmp3 1
-            ifn re_tmp3 0
+            set re_ov_source 0 ifg re_viewer_item 0 set re_ov_source 1 ifn re_source_prompt 0 set re_ov_source 1
+            ifn re_ov_source 0
             {
                 state re_ov_message
                 ife re_msg_state 2
@@ -405,7 +409,7 @@ defstate re_ov_status
             }
             else
             {
-                set re_text_x 48 set re_text_y 186 set re_a re_message state re_ov_text
+                ifge re_message 0 { set re_text_x 48 set re_text_y 186 set re_a re_message state re_ov_text }
                 ifn re_prompt_kind 2 ifn re_prompt_kind 5
                 {
                     state re_ov_yes_no
@@ -415,7 +419,7 @@ defstate re_ov_status
             }
         }
     }
-    ifn re_tmp 0
+    ifn re_ov_more 0
     {
         set re_tmp2 0 ifge re_selected 0 set re_tmp2 1
         ifn re_box_open 0 ifge re_box_state 2 set re_tmp2 0

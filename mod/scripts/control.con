@@ -186,6 +186,7 @@ ends
 gamevar re_pass_open 0 0
 gamevar re_near 0 0
 gamevar re_near_spr -1 0
+gamevar re_dist 0 0
 defstate re_interact
     set re_tmp 0
     ifg re_prompt_kind 0 set re_tmp 1
@@ -200,11 +201,11 @@ defstate re_interact
             getactorvar[re_k].re_pickup_id re_tmp
             ifg re_tmp 0
             {
-                ldist re_tmp3 THISACTOR re_k
-                ifl re_tmp3 re_near
+                ldist re_dist THISACTOR re_k
+                ifl re_dist re_near
                 {
                     set re_a re_k state re_can_interact
-                    ifn re_result 0 { set re_near_spr re_k set re_near re_tmp3 }
+                    ifn re_result 0 { set re_near_spr re_k set re_near re_dist }
                 }
             }
         }
@@ -219,11 +220,11 @@ defstate re_interact
                 set re_tmp2 0 ife re_tmp RE_T_CHEST set re_tmp2 1 ife re_tmp RE_T_TYPEWRITER set re_tmp2 1
                 ifn re_tmp2 0
                 {
-                    ldist re_tmp3 THISACTOR re_k
-                    ifl re_tmp3 re_near
+                    ldist re_dist THISACTOR re_k
+                    ifl re_dist re_near
                     {
                         set re_a re_k state re_can_interact
-                        ifn re_result 0 { set re_near_spr re_k set re_near re_tmp3 }
+                        ifn re_result 0 { set re_near_spr re_k set re_near re_dist }
                     }
                 }
             }
@@ -541,7 +542,7 @@ defstate re_gun_step
                     set re_tmp re_pad and re_tmp 2
                     set re_tmp2 re_pad and re_tmp2 8
                     ifn re_tmp 0 { set re_a 0x38 state re_rotate ifl re_phase 2 { set re_phase 2 set re_blend 0 } }
-                    else ifn re_tmp2 0 { set re_a -56 state re_rotate ifl re_phase 2 { set re_phase 2 set re_blend 0 } }
+                    else ifn re_tmp2 0 { set re_a -56 state re_rotate ifl re_phase 2 { set re_phase 2 set re_blend 0 } }  // lint: ok
                     else ifg re_phase 1 set re_phase 0
                 }
             }

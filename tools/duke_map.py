@@ -92,9 +92,9 @@ def place_stations(m, sprites, defines):
             raise RuntimeError('Station %s falls outside the map' % st['kind'])
         z = m.floor_z(sect, x, y)
         if st['kind'] == 'itembox':
-            spr = _sprite(x, y, z, defines['RE_T_CHEST'], sect, st['ang'], cstat=1, xrepeat=27, yrepeat=22)
+            spr = _sprite(x, y, z, defines['RE_T_CHEST'], sect, st['ang'], cstat=1, xrepeat=27, yrepeat=22, shade=-12)
         elif st['kind'] == 'typewriter':
-            spr = _sprite(x, y, z, defines['RE_T_TYPEWRITER'], sect, st['ang'], cstat=1, xrepeat=20, yrepeat=24)
+            spr = _sprite(x, y, z, defines['RE_T_TYPEWRITER'], sect, st['ang'], cstat=1, xrepeat=20, yrepeat=24, shade=-12)
         else:
             spr = _sprite(x, y, z, defines['RE_T_WORLD_' + st['kind'].upper()], sect, st['ang'],
                           lotag=PICKUP_KINDS.index(st['kind']))
@@ -102,7 +102,7 @@ def place_stations(m, sprites, defines):
     return np.concatenate([sprites, np.array(out, SPRITE)])
 
 
-def append_viewer_sector(m):
+def append_viewer_sector(m, black):
     """An unreachable black box far outside the level for the model-view scenes."""
     cx, cy = VIEWER_CENTRE; h = VIEWER_HALF
     sect = len(m.sectors); w0 = len(m.walls)
@@ -111,11 +111,13 @@ def append_viewer_sector(m):
         walls[i]['x'], walls[i]['y'] = x, y
         walls[i]['point2'] = w0 + (i + 1) % 4
         walls[i]['nextwall'] = walls[i]['nextsector'] = -1
-        walls[i]['shade'] = 127; walls[i]['xrepeat'] = walls[i]['yrepeat'] = 8
+        walls[i]['picnum'] = black; walls[i]['xrepeat'] = walls[i]['yrepeat'] = 8
     sec = np.zeros(1, SECTOR)[0]
     sec['wallptr'], sec['wallnum'] = w0, 4
     sec['floorz'], sec['ceilingz'] = VIEWER_FLOOR, VIEWER_CEILING
-    sec['floorshade'] = sec['ceilingshade'] = 127
+    # Black texture at full brightness: Duke adds a sector's floor shade to its
+    # sprites, so the scene must stay lit for the item/corpse models.
+    sec['floorpicnum'] = sec['ceilingpicnum'] = black
     m.walls = np.concatenate([m.walls, walls])
     m.sectors = np.concatenate([m.sectors, np.array([sec], SECTOR)])
     return sect
@@ -132,7 +134,7 @@ def generate(grp, tables, tiles):
     sprites, report = convert_pickups(m, tiles_by_kind)
     sprites = place_stations(m, sprites, defines)
     m.sprites = sprites
-    viewer = append_viewer_sector(m)
+    viewer = append_viewer_sector(m, defines['RE_T_BLACK'])
     (STAGE / 'E1L1.MAP').write_bytes(m.to_bytes())
 
     # Runtime tables shared with CON.
@@ -152,7 +154,11 @@ def generate(grp, tables, tiles):
     cams = duke_cameras.generate(m, playable_sectors, ROOT / 'tools/e1l1-cameras.json')
     for key in ('x', 'y', 'z', 'ang', 'horiz', 'sect'):
         tables.add('CAM_' + key.upper(), [c[key] for c in cams['cameras']])
-    tables.add('SECTOR_CAMERA', cams['sector_camera'] + [0])  # viewer sector -> dummy
+    sz = cams['sector_zone'] + [dict(start=0, x0=0, y0=0, cols=1, rows=1)]  # viewer sector -> dummy
+    for key in ('start', 'x0', 'y0', 'cols', 'rows'):
+        tables.add('SECTOR_ZONE_' + key.upper(), [z[key] for z in sz])
+    tables.add('ZONE_CAMERA', cams['zones'])
+    tables.const('RE_ZONE_CELL', duke_cameras.CELL)
     tables.const('RE_CAMERAS', len(cams['cameras']))
     write_json(ASSETS / 'e1l1-map-report.json', dict(pickups=report, stations=STATIONS, viewer_sector=viewer,
                                                      cameras=len(cams['cameras'])))

@@ -12,25 +12,35 @@ define RE_ROWS_QUOTE 9600
 // in: re_a = sprite. out: re_result.
 define RE_INTERACT_RANGE 384     // 48 Doom units
 define RE_INTERACT_DZ 6144
+gamevar re_ci_1 0 0
+gamevar re_ci_2 0 0
+gamevar re_ci_3 0 0
+gamevar re_ci_x 0 0
+gamevar re_ci_y 0 0
+gamevar re_ci_z 0 0
+gamevar re_ci_s 0 0
+gamevar re_ci_b 0 0
+gamevar re_ci_c 0 0
+gamevar re_ci_d 0 0
 defstate re_can_interact
     set re_result 0
     ifge re_a 0
     {
-        getactor[re_a].cstat re_tmp and re_tmp 32768
-        ife re_tmp 0
+        getactor[re_a].cstat re_ci_1 and re_ci_1 32768
+        ife re_ci_1 0
         {
-            ldist re_tmp THISACTOR re_a
-            ifl re_tmp RE_INTERACT_RANGE
+            ldist re_ci_1 THISACTOR re_a
+            ifl re_ci_1 RE_INTERACT_RANGE
             {
-                getactor[re_a].z re_tmp2 getactor[THISACTOR].z re_tmp3 sub re_tmp2 re_tmp3
-                ifl re_tmp2 0 mul re_tmp2 -1
-                ifl re_tmp2 RE_INTERACT_DZ
+                getactor[re_a].z re_ci_2 getactor[THISACTOR].z re_ci_3 sub re_ci_2 re_ci_3
+                ifl re_ci_2 0 mul re_ci_2 -1
+                ifl re_ci_2 RE_INTERACT_DZ
                 {
-                    getplayer[THISACTOR].posx re_b getplayer[THISACTOR].posy re_c getplayer[THISACTOR].posz re_d
-                    getplayer[THISACTOR].cursectnum re_tmp
-                    getactor[re_a].x re_px getactor[re_a].y re_py getactor[re_a].z re_pz getactor[re_a].sectnum re_psect
-                    sub re_pz 2048
-                    cansee re_b re_c re_d re_tmp re_px re_py re_pz re_psect re_result
+                    getplayer[THISACTOR].posx re_ci_b getplayer[THISACTOR].posy re_ci_c getplayer[THISACTOR].posz re_ci_d
+                    getplayer[THISACTOR].cursectnum re_ci_1
+                    getactor[re_a].x re_ci_x getactor[re_a].y re_ci_y getactor[re_a].z re_ci_z getactor[re_a].sectnum re_ci_s
+                    sub re_ci_z 2048
+                    cansee re_ci_b re_ci_c re_ci_d re_ci_1 re_ci_x re_ci_y re_ci_z re_ci_s re_result
                 }
             }
         }
