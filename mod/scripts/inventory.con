@@ -1,0 +1,189 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Carried inventory (8 slots), storage transfers and reload stacks.
+
+// Upstream FindItem(). in: re_a = id. out: re_result = slot or -1.
+defstate re_find_item
+    set re_result -1
+    for re_tmp range re_used
+    {
+        ifl re_result 0 { ife re_ids[re_tmp] re_a set re_result re_tmp }
+    }
+ends
+
+// in: re_a = id. out: re_result = 1 for stacking ammo/ribbons.
+defstate re_is_stack
+    set re_result 0
+    ife re_a ITEM_CLIP set re_result 1
+    ife re_a ITEM_SHELLS set re_result 1
+    ife re_a ITEM_RIBBON set re_result 1
+ends
+
+// Upstream CanAddItem(). Item viewer capacity branch (MainMenu.cpp 0x0044e1b0):
+// a full inventory accepts ammo only if an existing stack fits the whole pickup.
+// in: re_a = id, re_b = count. out: re_result.
+defstate re_can_add_item
+    ifl re_used 8 set re_result 1
+    else
+    {
+        state re_is_stack
+        ife re_result 1
+        {
+            set re_result 0
+            for re_tmp range re_used
+            {
+                ife re_ids[re_tmp] re_a
+                {
+                    set re_tmp2 re_qty[re_tmp] add re_tmp2 re_b
+                    ifl re_tmp2 251 set re_result 1
+                }
+            }
+        }
+    }
+ends
+
+// Upstream RemoveSlot(). in: re_a = slot.
+defstate re_remove_slot
+    set re_tmp re_a
+    set re_tmp2 re_used sub re_tmp2 1
+    whilel re_tmp re_tmp2
+    {
+        set re_tmp3 re_tmp add re_tmp3 1
+        setarray re_ids[re_tmp] re_ids[re_tmp3]
+        setarray re_qty[re_tmp] re_qty[re_tmp3]
+        add re_tmp 1
+    }
+    sub re_used 1
+    setarray re_ids[re_used] 0
+    setarray re_qty[re_used] 0
+    ife re_equipped re_a set re_equipped -1
+    else ifg re_equipped re_a sub re_equipped 1
+    ifge re_selected re_used { set re_selected re_used sub re_selected 1 ifl re_selected 0 set re_selected 0 }
+ends
+
+// Upstream AddItem(); room_event_item_pickup 0x00451700: ammo stacks cap 250,
+// herbs never stack. in: re_a = id, re_b = count. out: re_result.
+gamevar re_add_done 0 0
+defstate re_add_item
+    set re_add_done 0
+    state re_can_add_item
+    ife re_result 0 set re_add_done 1
+    ife re_add_done 0
+    {
+        state re_is_stack
+        ife re_result 1
+        {
+            for re_i range re_used
+            {
+                ife re_add_done 0
+                {
+                    ife re_ids[re_i] re_a
+                    {
+                        set re_tmp re_qty[re_i] add re_tmp re_b
+                        ifl re_tmp 251 { setarray re_qty[re_i] re_tmp set re_add_done 2 }
+                        else
+                        {
+                            // Decomp's decreasing slotCount comparison (8-i), including its
+                            // late-slot overflow quirk; quantity is an unsigned byte.
+                            set re_tmp2 8 sub re_tmp2 re_i
+                            ifl re_used re_tmp2
+                            {
+                                set re_b re_tmp add re_b 6 and re_b 255
+                                setarray re_qty[re_i] 250
+                                set re_add_done 3
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ife re_add_done 2 set re_result 1
+        else
+        {
+            ife re_used 8 set re_result 0
+            else
+            {
+                setarray re_ids[re_used] re_a
+                setarray re_qty[re_used] re_b
+                add re_used 1
+                set re_result 1
+            }
+        }
+    }
+    else set re_result 0
+ends
+
+// Upstream ReloadFromLargestStack(): magazine 15 (handgun) or 7 (shotgun).
+defstate re_reload_from_largest_stack
+    set re_c -1 set re_d 0
+    set re_a re_ids[re_equipped] add re_a 9
+    for re_i range re_used
+    {
+        ife re_ids[re_i] re_a
+        {
+            ifg re_qty[re_i] re_d { set re_c re_i set re_d re_qty[re_i] }
+        }
+    }
+    ifge re_c 0
+    {
+        set re_tmp 15
+        ife re_visible_weapon ITEM_SHOTGUN set re_tmp 7
+        ifl re_d re_tmp set re_tmp re_d
+        setarray re_qty[re_equipped] re_tmp
+        set re_tmp2 re_qty[re_c] sub re_tmp2 re_tmp
+        setarray re_qty[re_c] re_tmp2
+        ife re_tmp2 0 { set re_a re_c state re_remove_slot }
+    }
+ends
+
+// Upstream TransferBox(carried, stored). Source exchanges complete ItemSlot
+// records, never merges/splits; an equipped weapon in the slot is unequipped.
+// in: re_a = carried slot, re_b = stored slot. out: re_result.
+defstate re_transfer_box
+    set re_result 0
+    ifge re_a 0 ifl re_a 8 ifge re_b 0 ifl re_b 48
+    {
+        set re_tmp re_ids[re_a]
+        ife re_tmp 0 { ife re_box_ids[re_b] 0 set re_result -1 }
+        ife re_result 0
+        {
+            ife re_equipped re_a set re_equipped -1
+            set re_c re_box_ids[re_b] set re_d re_box_qty[re_b]
+            setarray re_box_ids[re_b] re_ids[re_a]
+            setarray re_box_qty[re_b] re_qty[re_a]
+            ifl re_a re_used
+            {
+                setarray re_ids[re_a] re_c
+                setarray re_qty[re_a] re_d
+                ife re_c 0 state re_remove_slot
+            }
+            else ifn re_c 0
+            {
+                setarray re_ids[re_used] re_c
+                setarray re_qty[re_used] re_d
+                add re_used 1
+            }
+            set re_result 1
+        }
+        else set re_result 0
+    }
+ends
+
+// in: re_a = id. out: re_result = 1 for herb items.
+defstate re_is_herb
+    set re_result 0
+    ife re_a ITEM_HERB set re_result 1
+    ife re_a ITEM_HERB_GG set re_result 1
+    ife re_a ITEM_HERB_GGG set re_result 1
+ends
+
+// out: re_result = recipe row for (re_a, re_b) or -1.
+defstate re_recipe
+    set re_result -1
+    for re_tmp range RE_RECIPES
+    {
+        ifl re_result 0
+        {
+            ife RECIPE_A[re_tmp] re_a { ife RECIPE_B[re_tmp] re_b set re_result re_tmp }
+        }
+    }
+ends

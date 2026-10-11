@@ -1,0 +1,100 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Jill's animation banks and visible model. Upstream drove 15 rigid joint
+// parts from live Joint_move angles; here every original skeletal frame is a
+// baked MD3 frame (one tile per frame) and EDuke32's model frame smoothing
+// stands in for the Joint_move blend. Timing and frame choice are unchanged.
+
+// Upstream NewMotion().
+defstate re_new_motion  // in: re_a = motion
+    set re_motion re_a set re_animframe 0 set re_anim_timing 0 set re_blend 3
+ends
+
+// Upstream JointMove(reverse, body, blendStep). in: re_jm_reverse, re_jm_body.
+// out: re_result = 1 when the motion wrapped this step.
+gamevar re_jm_reverse 0 0
+gamevar re_jm_body 0 0
+gamevar re_jm_count 1 0
+gamevar re_jm_start 0 0
+defstate re_joint_move
+    set re_result 0
+    ifg re_anim_timing 1 { sub re_anim_timing 1 }
+    else
+    {
+        ifn re_jm_body 0
+        { set re_anim_bank 2 set re_jm_count ANIM_BODY_COUNT[re_motion] set re_jm_start ANIM_BODY_START[re_motion] }
+        else ife re_visible_weapon ITEM_SHOTGUN
+        { set re_anim_bank 3 set re_jm_count ANIM_SHOTGUN_COUNT[re_motion] set re_jm_start ANIM_SHOTGUN_START[re_motion] }
+        else ifn re_visible_armed 0
+        { set re_anim_bank 0 set re_jm_count ANIM_ARMED_COUNT[re_motion] set re_jm_start ANIM_ARMED_START[re_motion] }
+        else
+        { set re_anim_bank 1 set re_jm_count ANIM_UNARMED_COUNT[re_motion] set re_jm_start ANIM_UNARMED_START[re_motion] }
+        ifle re_jm_count 0 set re_jm_count 1
+        mod re_animframe re_jm_count
+        set re_reverse_pose re_jm_reverse
+        set re_shown_frame re_jm_start
+        ifn re_jm_reverse 0 { add re_shown_frame re_jm_count sub re_shown_frame 1 sub re_shown_frame re_animframe }
+        else add re_shown_frame re_animframe
+        set re_anim_timing ANIM_TIMING[re_shown_frame]
+        ifg re_blend 0 sub re_blend 1
+        add re_animframe 1
+        ifge re_animframe re_jm_count { set re_animframe 0 set re_result 1 }
+    }
+    set re_jm_reverse 0 set re_jm_body 0
+ends
+
+// Spawn the visible Jill (a model sprite following the hidden Duke player).
+defstate re_spawn_jill
+    ife re_jill -1
+    {
+        espawn RE_T_POSE_ARMED
+        set re_jill RETURN
+        setactor[re_jill].cstat 0
+        setactor[re_jill].xrepeat 64
+        setactor[re_jill].yrepeat 64
+        setactor[re_jill].clipdist 0
+        setactor[re_jill].shade 0
+        changespritestat re_jill 1
+    }
+ends
+
+// Upstream ApplyPose(): choose the pose tile and place the model at Jill's feet.
+// in: re_a/re_b/re_c = position, re_d = sector, re_tmp3 = angle.
+defstate re_apply_pose
+    ifge re_jill 0
+    {
+        ife re_visible_weapon ITEM_SHOTGUN set re_tmp RE_T_POSE_SHOTGUN
+        else ifn re_visible_armed 0 set re_tmp RE_T_POSE_ARMED
+        else set re_tmp RE_T_POSE_UNARMED
+        add re_tmp re_shown_frame
+        setactor[re_jill].picnum re_tmp
+        setactor[re_jill].ang re_tmp3
+        setsprite re_jill re_a re_b re_c
+        getactor[re_jill].sectnum re_tmp
+        ifn re_tmp re_d changespritesect re_jill re_d
+    }
+ends
+
+// Place the pose at the player sprite (normal play).
+defstate re_pose_at_player
+    getactor[THISACTOR].x re_a
+    getactor[THISACTOR].y re_b
+    getactor[THISACTOR].z re_c
+    getactor[THISACTOR].sectnum re_d
+    getplayer[THISACTOR].ang re_tmp3
+    state re_apply_pose
+ends
+
+// Upstream SyncWeaponModel(): reset to idle with the equipped weapon shown.
+defstate re_sync_weapon_model
+    set re_tmp 0
+    ifge re_equipped 0 set re_tmp re_ids[re_equipped]
+    set re_visible_weapon re_tmp
+    set re_visible_armed 0
+    ife re_tmp ITEM_HANDGUN set re_visible_armed 1
+    ife re_tmp ITEM_SHOTGUN set re_visible_armed 1
+    set re_behavior 0 set re_phase 0 set re_aimflags 0 set re_aim_lock 0 set re_aim_target -1 set re_speed 0
+    set re_a 0 state re_new_motion
+    set re_jm_body 1 state re_joint_move
+    set re_blend 0
+    state re_pose_at_player
+ends

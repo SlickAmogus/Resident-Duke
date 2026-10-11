@@ -1,0 +1,147 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// World freeze, fixed cameras and RE presentation of the Duke world.
+
+// ---- World freeze -------------------------------------------------------------
+// Upstream froze the level (Level.SetFrozen) while RE menus are up. EDuke32's
+// pause would also stop the input event that drives those menus, so instead
+// every moving status list is parked at STAT_PARK_BASE+stat, which no engine
+// loop visits, and restored afterwards. Statuses: actors, sleeping actors,
+// effectors, projectiles, misc, standables, transports, FX and fallers.
+gamearray re_park_stats 9
+defstate re_park_init
+    setarray re_park_stats[0] 1
+    setarray re_park_stats[1] 2
+    setarray re_park_stats[2] 3
+    setarray re_park_stats[3] 4
+    setarray re_park_stats[4] 5
+    setarray re_park_stats[5] 6
+    setarray re_park_stats[6] 9
+    setarray re_park_stats[7] 11
+    setarray re_park_stats[8] 12
+ends
+
+gamevar re_park_stat 0 0
+gamevar re_park_spr 0 0
+defstate re_set_frozen  // in: re_a = 1 freeze, 0 thaw
+    ifn re_a re_frozen
+    {
+        set re_frozen re_a
+        for re_k range 9
+        {
+            set re_park_stat re_park_stats[re_k]
+            ife re_frozen 1
+            {
+                for re_park_spr spritesofstatus re_park_stat
+                {
+                    set re_tmp re_park_stat add re_tmp STAT_PARK_BASE
+                    changespritestat re_park_spr re_tmp
+                }
+            }
+            else
+            {
+                set re_tmp re_park_stat add re_tmp STAT_PARK_BASE
+                for re_park_spr spritesofstatus re_tmp
+                    changespritestat re_park_spr re_park_stat
+            }
+        }
+    }
+ends
+
+// Upstream UpdateFreeze().
+defstate re_update_freeze
+    set re_a 0
+    ifge re_death_stage 3 set re_a 1
+    ifg re_save_state 0 set re_a 1
+    ifn re_status_open 0 set re_a 1
+    ifn re_box_open 0 set re_a 1
+    ifg re_prompt_kind 0 set re_a 1
+    ifg re_menu_fade_mode 0 set re_a 1
+    ifg re_viewer_item 0 set re_a 1
+    state re_set_frozen
+ends
+
+// ---- Fixed cameras -------------------------------------------------------------
+// tools/duke_cameras.py chose one static shot per sector. A shot is kept while
+// it can still see Jill inside its framing limits; otherwise the camera cuts
+// to the shot of the sector Jill is in. Shots never track her heading.
+define RE_CAM_KEEP_DIST 12000   // xy units beyond which a shot no longer frames Jill
+define RE_CAM_HALF_FOV 300      // Build angle units either side of the shot axis
+
+gamevar re_cam_want 0 0
+defstate re_camera_sees_jill  // in: re_a = camera index; out: re_result
+    set re_result 0
+    ifge re_a 0
+    {
+        set re_tmp CAM_X[re_a] sub re_tmp re_px
+        set re_tmp2 CAM_Y[re_a] sub re_tmp2 re_py
+        set re_tmp3 re_tmp mul re_tmp3 re_tmp set re_b re_tmp2 mul re_b re_tmp2 add re_tmp3 re_b
+        sqrt re_tmp3 re_tmp3
+        ifle re_tmp3 RE_CAM_KEEP_DIST
+        {
+            // Angle from camera to Jill against the shot's fixed heading.
+            set re_b re_px sub re_b CAM_X[re_a]
+            set re_c re_py sub re_c CAM_Y[re_a]
+            getangle re_d re_b re_c
+            set re_b CAM_ANG[re_a]
+            getincangle re_c re_b re_d
+            ifl re_c 0 mul re_c -1
+            ifle re_c RE_CAM_HALF_FOV
+            {
+                set re_b CAM_X[re_a] set re_c CAM_Y[re_a] set re_d CAM_Z[re_a]
+                set re_tmp CAM_SECT[re_a]
+                cansee re_b re_c re_d re_tmp re_px re_py re_pz re_psect re_result
+            }
+        }
+    }
+ends
+
+// Called once per game tic with re_px/re_py/re_psect = Jill's position and
+// re_pz = her mid-body height.
+defstate re_update_camera
+    set re_result 1
+    ifge re_psect 0 { set re_a re_cam state re_camera_sees_jill }
+    ife re_result 0
+    {
+        set re_cam_want SECTOR_CAMERA[re_psect]
+        ifn re_cam_want re_cam
+        {
+            set re_cam re_cam_want
+            set re_cam_x CAM_X[re_cam] set re_cam_y CAM_Y[re_cam] set re_cam_z CAM_Z[re_cam]
+            set re_cam_ang CAM_ANG[re_cam] set re_cam_horiz CAM_HORIZ[re_cam] set re_cam_sect CAM_SECT[re_cam]
+            // Keep the anchor inside its sector's current floor/ceiling (doors, lifts).
+            getflorzofslope re_cam_sect re_cam_x re_cam_y re_tmp
+            getceilzofslope re_cam_sect re_cam_x re_cam_y re_tmp2
+            sub re_tmp 1024 add re_tmp2 1024
+            ifg re_cam_z re_tmp set re_cam_z re_tmp
+            ifl re_cam_z re_tmp2 set re_cam_z re_tmp2
+            // RE background music follows the shot's area (outdoors vs. interior).
+            set re_tmp SECTOR_MUSIC[re_psect]
+            ifn re_tmp re_music
+            {
+                set re_music re_tmp
+                ife re_music 1 starttrackslot 0 1 else starttrackslot 0 0
+            }
+        }
+    }
+ends
+
+// ---- Long falls ------------------------------------------------------------------
+// Duke's rooftop vent drops through a shaft into a teleporter. Jill uses
+// Duke's own physics for that fall; the screen holds black for its duration,
+// presented like an RE room transition, and fades back in on landing.
+define RE_FALL_SPEED 2600       // poszv above which Jill is in a real fall
+define RE_FALL_TICKS 6
+gamevar re_fall_ticks 0 0
+gamevar re_fall_fade 0 0        // 0..32767 black overlay strength
+defstate re_update_fall
+    getplayer[THISACTOR].poszv re_tmp
+    getplayer[THISACTOR].on_ground re_tmp2
+    ifg re_tmp RE_FALL_SPEED { add re_fall_ticks 1 }
+    else ifn re_tmp2 0 { set re_fall_ticks 0 }
+    ifge re_fall_ticks RE_FALL_TICKS { set re_falling 1 set re_fall_fade 32767 }
+    else ifn re_falling 0
+    {
+        ifn re_tmp2 0 { set re_falling 0 }
+    }
+    ife re_falling 0 { ifg re_fall_fade 0 { sub re_fall_fade 0x1800 ifl re_fall_fade 0 set re_fall_fade 0 } }
+ends

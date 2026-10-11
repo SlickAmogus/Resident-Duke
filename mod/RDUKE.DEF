@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Resident Duke definitions. All referenced art, models and sounds are
+// converted locally from the user's own Resident Evil 1 PC files.
+include gen/tiles.def
+include gen/models.def

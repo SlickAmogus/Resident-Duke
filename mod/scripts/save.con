@@ -1,0 +1,245 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// RE1 PC typewriter: check_typewriter 0x0041bed0, check_typewriter_state
+// 0x0041c330, LoadSaveGameState 0x00493310. EDuke32's own save files are used:
+// each typewriter save spends one ink ribbon and writes a native save. The
+// eight typewriter rows and their save counters persist across sessions in a
+// small table file beside the saves; loading uses EDuke32's load menu.
+
+definequote 9600 resident-duke-typewriter.bin
+define RE_ROWS_QUOTE 9600
+
+// Upstream CanInteractWorld(): visible, within range, similar height, in sight.
+// in: re_a = sprite. out: re_result.
+define RE_INTERACT_RANGE 384     // 48 Doom units
+define RE_INTERACT_DZ 6144
+defstate re_can_interact
+    set re_result 0
+    ifge re_a 0
+    {
+        getactor[re_a].cstat re_tmp and re_tmp 32768
+        ife re_tmp 0
+        {
+            ldist re_tmp THISACTOR re_a
+            ifl re_tmp RE_INTERACT_RANGE
+            {
+                getactor[re_a].z re_tmp2 getactor[THISACTOR].z re_tmp3 sub re_tmp2 re_tmp3
+                ifl re_tmp2 0 mul re_tmp2 -1
+                ifl re_tmp2 RE_INTERACT_DZ
+                {
+                    getplayer[THISACTOR].posx re_b getplayer[THISACTOR].posy re_c getplayer[THISACTOR].posz re_d
+                    getplayer[THISACTOR].cursectnum re_tmp
+                    getactor[re_a].x re_px getactor[re_a].y re_py getactor[re_a].z re_pz getactor[re_a].sectnum re_psect
+                    sub re_pz 2048
+                    cansee re_b re_c re_d re_tmp re_px re_py re_pz re_psect re_result
+                }
+            }
+        }
+    }
+ends
+
+// The sword-key lock: the original E1L1 red ACCESSSWITCH sprite. Jill must
+// be in front of it. out: re_result = switch sprite or -1.
+define ACCESSSWITCH_TILE 130
+define ACCESSSWITCH2_TILE 170
+define RE_SWITCH_RANGE 1024
+defstate re_find_key_switch
+    set re_k -1
+    for re_i allsprites
+    {
+        getactor[re_i].picnum re_tmp
+        set re_tmp2 0
+        ife re_tmp ACCESSSWITCH_TILE set re_tmp2 1
+        ife re_tmp ACCESSSWITCH2_TILE set re_tmp2 1
+        ifn re_tmp2 0 ifl re_k 0
+        {
+            ldist re_tmp THISACTOR re_i
+            ifl re_tmp RE_SWITCH_RANGE set re_k re_i
+        }
+    }
+    set re_result re_k
+ends
+
+defstate re_load_save_rows
+    for re_i range 8 setarray re_save_rows[re_i] -1
+    readarrayfromfile re_save_rows RE_ROWS_QUOTE
+ends
+
+// Upstream UseTypewriter(). in: re_a = typewriter sprite.
+defstate re_use_typewriter
+    set re_tmp 0
+    ifle re_health 0 set re_tmp 1
+    ifg re_save_state 0 set re_tmp 1
+    ifg re_prompt_kind 0 set re_tmp 1
+    ifn re_status_open 0 set re_tmp 1
+    ifn re_box_open 0 set re_tmp 1
+    ifg re_viewer_item 0 set re_tmp 1
+    ife re_tmp 0
+    {
+        set re_active_typewriter re_a
+        state re_can_interact
+        ifn re_result 0
+        {
+            set re_a ITEM_RIBBON state re_find_item
+            set re_a 8 ifge re_result 0 set re_a 7
+            set re_b -1 state re_begin_prompt
+        }
+    }
+ends
+
+// Upstream OpenTypewriterMenu().
+defstate re_open_typewriter_menu
+    set re_a re_active_typewriter state re_can_interact
+    set re_tmp re_result
+    set re_a ITEM_RIBBON state re_find_item
+    ifn re_tmp 0 ifge re_result 0
+    {
+        set re_save_state 7 set re_save_fade 0 set re_save_slot 0 set re_save_choice 0 set re_save_delay 0
+        set re_save_blink 0 set re_save_blink_timer 5
+        state re_load_save_rows
+        state re_update_freeze
+    }
+ends
+
+// Upstream CloseTypewriterMenu().
+defstate re_close_typewriter_menu
+    set re_save_state 0 set re_save_fade 0 set re_active_typewriter -1
+    state re_update_freeze
+ends
+
+// Upstream ConsumeSaveRibbon(). out: re_result.
+defstate re_consume_save_ribbon
+    set re_a re_active_typewriter state re_can_interact
+    set re_tmp re_result
+    set re_a ITEM_RIBBON state re_find_item
+    set re_c re_result
+    set re_result 0
+    ifn re_tmp 0 ifge re_c 0 ifg re_health 0
+    {
+        set re_tmp re_qty[re_c] sub re_tmp 1 setarray re_qty[re_c] re_tmp
+        ife re_tmp 0 { set re_a re_c state re_remove_slot }
+        set re_result 1
+    }
+ends
+
+// Upstream CommitTypewriterSave(): one ribbon is spent before writing. The world
+// is thawed first so the native save is an ordinary, unfrozen game state; the
+// row reveal starts on the following tic.
+defstate re_commit_typewriter_save
+    state re_consume_save_ribbon
+    ife re_result 0 state re_close_typewriter_menu
+    else
+    {
+        setarray re_save_rows[re_save_slot] re_save_counter
+        writearraytofile re_save_rows RE_ROWS_QUOTE
+        set re_save_state 0
+        state re_update_freeze
+        set re_save_pending 1
+        ife re_save_slot 0 save 0
+        ife re_save_slot 1 save 1
+        ife re_save_slot 2 save 2
+        ife re_save_slot 3 save 3
+        ife re_save_slot 4 save 4
+        ife re_save_slot 5 save 5
+        ife re_save_slot 6 save 6
+        ife re_save_slot 7 save 7
+    }
+ends
+
+// Runs the tic after the save request: reveal the typed row (state 6).
+defstate re_after_save
+    ife re_save_pending 1
+    {
+        set re_save_pending 0
+        set re_save_reveal 0 set re_save_reveal_timer 6 set re_save_state 6
+        state re_update_freeze
+    }
+ends
+
+// Upstream TypewriterStep().
+defstate re_typewriter_step
+    ife re_save_state 7
+    {
+        add re_save_fade 0x1000
+        ifge re_save_fade 0x10000 { set re_save_state 1 set re_save_fade 0 }
+    }
+    else ife re_save_state 6
+    {
+        sub re_save_reveal_timer 1
+        ife re_save_reveal_timer 0
+        {
+            set re_a RE_SND_TYPE_B state re_sound
+            add re_save_reveal 1 set re_save_reveal_timer 6
+            ifg re_save_reveal 28
+            {
+                // Counter advances after the reveal (upstream re_save_reveal event).
+                add re_save_counter 1 ifg re_save_counter 99 set re_save_counter 99
+                state re_close_typewriter_menu
+            }
+        }
+    }
+    else
+    {
+        ife re_save_blink_timer 0 { xor re_save_blink 1 set re_save_blink_timer 5 } else sub re_save_blink_timer 1
+        set re_tmp re_raw and re_tmp 0x5000
+        ife re_save_state 2
+        {
+            ife re_tmp 0 set re_save_delay 0
+            ife re_save_delay 0 set re_save_state 1 else sub re_save_delay 1
+        }
+        else ife re_save_state 3
+        {
+            set re_tmp2 re_pressed and re_tmp2 0x8000
+            ifn re_tmp2 0 set re_save_state 1
+            else
+            {
+                ife re_tmp 0 set re_save_delay 0
+                ifg re_save_delay 0 sub re_save_delay 1
+                else
+                {
+                    set re_tmp2 re_raw and re_tmp2 0xa000
+                    ifn re_tmp2 0
+                    {
+                        set re_tmp2 re_raw and re_tmp2 0x8000
+                        ifn re_tmp2 0 set re_save_choice 0 else set re_save_choice 1
+                        set re_save_delay 6 set re_save_blink 0 set re_save_blink_timer 5
+                    }
+                    set re_tmp2 re_pressed and re_tmp2 0x4000
+                    ifn re_tmp2 0
+                    {
+                        ife re_save_choice 0 state re_commit_typewriter_save else set re_save_state 1
+                    }
+                }
+            }
+        }
+        else
+        {
+            set re_tmp2 re_pressed and re_tmp2 0x8000
+            ifn re_tmp2 0 state re_close_typewriter_menu
+            else
+            {
+                set re_tmp2 re_raw and re_tmp2 0x1000
+                ifn re_tmp2 0
+                {
+                    add re_save_slot 8 mod re_save_slot 9
+                    set re_a RE_SND_TYPE_A state re_sound
+                    set re_save_state 2 set re_save_delay 6 set re_save_blink 0 set re_save_blink_timer 5
+                }
+                set re_tmp2 re_raw and re_tmp2 0x4000
+                ifn re_tmp2 0
+                {
+                    add re_save_slot 1 mod re_save_slot 9
+                    set re_a RE_SND_TYPE_A state re_sound
+                    set re_save_state 2 set re_save_delay 6 set re_save_blink 0 set re_save_blink_timer 5
+                }
+                set re_tmp2 re_pressed and re_tmp2 0x4000
+                ifn re_tmp2 0
+                {
+                    ife re_save_slot 8 state re_close_typewriter_menu
+                    else ifge re_save_rows[re_save_slot] 0
+                    { set re_save_state 3 set re_save_choice 0 set re_save_blink 1 set re_save_delay 0 }
+                    else state re_commit_typewriter_save
+                }
+            }
+        }
+    }
+ends

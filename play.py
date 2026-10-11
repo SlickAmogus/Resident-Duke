@@ -1,33 +1,66 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Build on first launch, then run the locally generated prototype."""
+"""Build on first launch, then run the locally generated prototype in EDuke32."""
 from pathlib import Path
-import os,subprocess,sys
-ROOT=Path(__file__).resolve().parent
+import os, shutil, subprocess, sys
+
+ROOT = Path(__file__).resolve().parent
+PACKAGE = ROOT / 'build/resident-duke.zip'
+RUNTIME = ROOT / 'build/runtime'
+EXE = ROOT / 'dependencies/eduke32' / ('eduke32.exe' if os.name == 'nt' else 'eduke32')
+GRP = ROOT / 'dependencies/duke3d/duke3d.grp'
+
+# First-run EDuke32 configuration: windowed OpenGL (Polymost), the RE slice's
+# own menu keys come from controls.cfg (executed as autoexec.cfg every launch).
+DEFAULT_CONFIG = """[Setup]
+ForceSetup = 0
+NoAutoLoad = 1
+SelectedGRP = "duke3d.grp"
+
+[Screen Setup]
+Polymer = 0
+ScreenBPP = 32
+ScreenMode = 0
+ScreenWidth = 1280
+ScreenHeight = 720
+"""
+
+
+def prepare_runtime():
+    RUNTIME.mkdir(parents=True, exist_ok=True)
+    for name in ('logs', 'saves'):
+        (ROOT / name).mkdir(exist_ok=True)
+    config = RUNTIME / 'eduke32.cfg'
+    if not config.exists():
+        config.write_text(DEFAULT_CONFIG)
+    # Controls are reapplied each launch so EDuke32's saved binds cannot drift.
+    shutil.copyfile(ROOT / 'controls.cfg', RUNTIME / 'autoexec.cfg')
+
+
+def command(extra):
+    return [str(EXE), '-usecwd', '-nosetup', '-j', str(GRP.parent), '-gamegrp', GRP.name, '-g', str(PACKAGE),
+            '-x', 'RDUKE.CON', '-h', 'RDUKE.DEF', '-v1', '-l1', '-s2', *extra]
+
 
 def main():
- package=ROOT/'build/doom-re1.pk3'
- if not package.is_file():
-  print('First launch: checking your game files and preparing Resident Doom...',flush=True)
-  # Existing setup checks all three input folders before installing/building.
-  result=subprocess.run([sys.executable,str(ROOT/'setup.py')],cwd=ROOT)
-  if result.returncode:return result.returncode
-  if not package.is_file():raise RuntimeError('Setup did not create the game build. Check the setup output above.')
- # Repeat launches never inspect RE1 input or rerun setup/dependency installation.
- exe=ROOT/'dependencies/gzdoom'/('gzdoom.exe' if os.name=='nt' else 'gzdoom')
- if not exe.is_file():raise RuntimeError('Missing GZDoom; unpack its distribution into dependencies/gzdoom/')
- iwad=ROOT/'dependencies/doom/doom.wad'
- if not iwad.is_file():raise RuntimeError('Missing dependencies/doom/doom.wad. Put your registered Doom IWAD there.')
- for name in ['logs','saves','build/config','build/cache','build/data']:(ROOT/name).mkdir(parents=True,exist_ok=True)
- env=os.environ.copy()
- if os.name!='nt':env['LD_LIBRARY_PATH']=str(exe.parent)+(':'+env['LD_LIBRARY_PATH'] if env.get('LD_LIBRARY_PATH') else '')
- for name,folder in [('CONFIG','config'),('CACHE','cache'),('DATA','data')]:env['XDG_'+name+'_HOME']=str(ROOT/'build'/folder)
- command=[str(exe),'-iwad',str(iwad),'-file',str(package),'-config',str(ROOT/'build/gzdoom.ini'),'-savedir',str(ROOT/'saves'),'-noautoload','-stdout','-logfile',str(ROOT/'logs/gzdoom.log'),'+exec',str(ROOT/'controls.cfg'),'+map','E1M1','+re_joint_render','true','+re_start_title','true',*sys.argv[1:]]
- print('Starting Resident Doom...',flush=True)
- with (ROOT/'logs/launch.log').open('w') as log:result=subprocess.run(command,cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT)
- if result.returncode:raise RuntimeError('GZDoom exited with an error; see logs/launch.log')
- return 0
+    if not PACKAGE.is_file():
+        print('First launch: checking your game files and preparing Resident Duke...', flush=True)
+        # Setup checks all three input folders before installing/building.
+        result = subprocess.run([sys.executable, str(ROOT / 'setup.py')], cwd=ROOT)
+        if result.returncode: return result.returncode
+        if not PACKAGE.is_file(): raise RuntimeError('Setup did not create the game build. Check the setup output above.')
+    # Repeat launches never inspect RE1 input or rerun setup.
+    if not EXE.is_file(): raise RuntimeError('Missing EDuke32; unpack it into dependencies/eduke32/')
+    if not GRP.is_file(): raise RuntimeError('Missing dependencies/duke3d/duke3d.grp')
+    prepare_runtime()
+    print('Starting Resident Duke...', flush=True)
+    with (ROOT / 'logs/launch.log').open('w') as log:
+        result = subprocess.run(command(sys.argv[1:]), cwd=RUNTIME, stdout=log, stderr=subprocess.STDOUT)
+    if result.returncode: raise RuntimeError('EDuke32 exited with an error; see logs/launch.log and build/runtime/eduke32.log')
+    return 0
 
-if __name__=='__main__':
- try:sys.exit(main())
- except Exception as e:print('Resident Doom:',e,file=sys.stderr);sys.exit(1)
+
+if __name__ == '__main__':
+    try: sys.exit(main())
+    except Exception as e:
+        print('Resident Duke:', e, file=sys.stderr); sys.exit(1)

@@ -1,0 +1,218 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Shared helpers: item table lookups, text pool access and the native-pixel
+// RE UI drawing primitives (upstream REHandler.Art/NativeDim/NativeText).
+
+// ---- Item tables ------------------------------------------------------------
+// in: re_a = RE item id. out: re_result = row in the ITEM_* tables or -1.
+defstate re_item_index
+    set re_result -1
+    for re_tmp range RE_ITEM_KINDS
+    {
+        ifl re_result 0 { ife ITEM_ID[re_tmp] re_a set re_result re_tmp }
+    }
+ends
+
+// in: re_a = item id. out: re_result = TEXT offset of its displayed name.
+// Rendering.cpp message_item_name_lookup: generic name until examined.
+defstate re_item_name
+    state re_item_index
+    ifl re_result 0 { set re_result RE_STR_NOTHING }
+    else
+    {
+        set re_tmp ITEM_EXAMINE_FLAG[re_result]
+        set re_tmp2 1
+        ifl re_tmp 128 { shiftl re_tmp2 re_tmp and re_tmp2 re_examined }
+        ifn re_tmp2 0 { set re_result ITEM_NAME_TEXT[re_result] }
+        else { set re_result ITEM_UNKNOWN_TEXT[re_result] }
+    }
+ends
+
+// in: re_a = item id. out: re_result = icon tile (0 for empty).
+defstate re_item_icon
+    state re_item_index
+    ifl re_result 0 { set re_result RE_T_EMPTY }
+    else { set re_tmp ITEM_ICON[re_result] set re_result RE_T_ICON add re_result re_tmp }
+ends
+
+// ---- Sounds -----------------------------------------------------------------
+// in: re_a = sound id. Non-positional, as upstream's ATTN_NONE RESound().
+defstate re_sound
+    globalsoundvar re_a
+ends
+
+// ---- UI coordinate system ----------------------------------------------------
+// Every UI coordinate is a native RE1 PC pixel in a 320x240 frame centred on
+// screen at a uniform scale, as upstream. rotatesprite's virtual 320x200 space
+// becomes square-pixel when draw_yxaspect = 65536/1.2; RE (x,y) maps to
+// virtual (x, y-20). Clip rectangles are converted to real screen pixels.
+gamevar re_ui_scale 65536 0
+gamevar re_ui_ox 0 0
+gamevar re_ui_oy 0 0
+gamevar re_art_tile 0 0
+gamevar re_art_x 0 0
+gamevar re_art_y 0 0
+gamevar re_art_w 0 0       // destination width in RE pixels; 0 = native
+gamevar re_art_alpha 0 0   // 0 opaque .. 255 invisible
+gamevar re_clip_x1 0 0
+gamevar re_clip_y1 0 0
+gamevar re_clip_x2 320 0
+gamevar re_clip_y2 240 0
+gamevar re_art_z 0 0
+gamevar re_art_sx 0 0
+gamevar re_art_sy 0 0
+gamevar re_cx1 0 0
+gamevar re_cy1 0 0
+gamevar re_cx2 0 0
+gamevar re_cy2 0 0
+
+defstate re_ui_begin
+    // scale = min(xdim/320, ydim/240) in 16.16
+    set re_tmp xdim shiftl re_tmp 16 div re_tmp 320
+    set re_tmp2 ydim shiftl re_tmp2 16 div re_tmp2 240
+    set re_ui_scale re_tmp
+    ifl re_tmp2 re_ui_scale set re_ui_scale re_tmp2
+    set re_tmp re_ui_scale mul re_tmp 320 shiftr re_tmp 16
+    set re_ui_ox xdim sub re_ui_ox re_tmp div re_ui_ox 2
+    set re_tmp re_ui_scale mul re_tmp 240 shiftr re_tmp 16
+    set re_ui_oy ydim sub re_ui_oy re_tmp div re_ui_oy 2
+    setuserdef .draw_yxaspect 54613
+    set re_clip_x1 0 set re_clip_y1 0 set re_clip_x2 320 set re_clip_y2 240
+ends
+
+defstate re_ui_end
+    setuserdef .draw_yxaspect 65536
+ends
+
+// RE pixel -> screen pixel for the clip rectangle.
+defstate re_ui_clip
+    set re_cx1 re_clip_x1 mul re_cx1 re_ui_scale shiftr re_cx1 16 add re_cx1 re_ui_ox
+    set re_cy1 re_clip_y1 mul re_cy1 re_ui_scale shiftr re_cy1 16 add re_cy1 re_ui_oy
+    set re_cx2 re_clip_x2 mul re_cx2 re_ui_scale shiftr re_cx2 16 add re_cx2 re_ui_ox sub re_cx2 1
+    set re_cy2 re_clip_y2 mul re_cy2 re_ui_scale shiftr re_cy2 16 add re_cy2 re_ui_oy sub re_cy2 1
+    ifl re_cx1 0 set re_cx1 0
+    ifl re_cy1 0 set re_cy1 0
+    ifge re_cx2 xdim { set re_cx2 xdim sub re_cx2 1 }
+    ifge re_cy2 ydim { set re_cy2 ydim sub re_cy2 1 }
+ends
+
+// Draw re_art_tile with its top-left at RE pixel (re_art_x, re_art_y).
+defstate re_art
+    set re_art_z 65536
+    ifg re_art_w 0
+    {
+        gettiledata[re_art_tile].xsize re_tmp
+        ifg re_tmp 0 { set re_art_z re_art_w shiftl re_art_z 16 div re_art_z re_tmp }
+    }
+    set re_art_sx re_art_x
+    set re_art_sy re_art_y sub re_art_sy 20
+    state re_ui_clip
+    // 8 = no viewport clip (full screen), 16 = top-left origin.
+    rotatespritea re_art_sx re_art_sy re_art_z 0 re_art_tile 0 0 24 re_art_alpha re_cx1 re_cy1 re_cx2 re_cy2
+    set re_art_w 0 set re_art_alpha 0
+ends
+
+gamevar re_rect_x1 0 0
+gamevar re_rect_y1 0 0
+gamevar re_rect_x2 0 0
+gamevar re_rect_y2 0 0
+// Solid rectangle (upstream NativeDim). in: re_a=x re_b=y re_c=w re_d=h,
+// re_art_tile = colour tile, re_art_alpha = transparency.
+defstate re_rect
+    set re_rect_x1 re_clip_x1 set re_rect_y1 re_clip_y1 set re_rect_x2 re_clip_x2 set re_rect_y2 re_clip_y2
+    set re_clip_x1 re_a set re_clip_y1 re_b
+    set re_clip_x2 re_a add re_clip_x2 re_c
+    set re_clip_y2 re_b add re_clip_y2 re_d
+    set re_art_x re_a set re_art_y re_b set re_art_w 400
+    state re_art
+    set re_clip_x1 re_rect_x1 set re_clip_y1 re_rect_y1 set re_clip_x2 re_rect_x2 set re_clip_y2 re_rect_y2
+ends
+
+// Whole-screen fill (upstream Screen.Dim over the full window).
+// in: re_art_tile = colour tile, re_art_alpha.
+gamevar re_fill_alpha 0 0
+defstate re_fill
+    set re_fill_alpha re_art_alpha
+    set re_tmp xdim shiftl re_tmp 17 div re_tmp 64   // two screens wide at 64 px
+    rotatespritea 0 0 re_tmp 0 re_art_tile 0 0 1048 re_fill_alpha 0 0 xdim ydim
+    set re_art_alpha 0
+ends
+
+// ---- Text -------------------------------------------------------------------
+// Glyph strings are char codes in a line buffer (TEXT pool entries end at -1).
+gamearray re_line 64
+gamevar re_line_len 0 0
+gamevar re_text_x 0 0
+gamevar re_text_y 0 0
+gamevar re_text_font 0 0   // RE_T_GLYPH, RE_T_GLYPH_GREEN or RE_T_GLYPH_GRAY
+gamevar re_text_origin 0 0
+
+// in: re_a = TEXT offset. Copies the string into re_line.
+defstate re_line_from_text
+    set re_line_len 0 set re_tmp re_a
+    set re_tmp2 TEXT[re_tmp]
+    whilel re_line_len 63
+    {
+        ifl re_tmp2 0 { set re_line_len re_line_len }
+        else
+        {
+            setarray re_line[re_line_len] re_tmp2
+            add re_line_len 1 add re_tmp 1
+        }
+        ifl re_tmp2 0 { exit } else { set re_tmp2 TEXT[re_tmp] }
+    }
+ends
+
+// in: re_a = TEXT offset. Appends to re_line.
+defstate re_line_append_text
+    set re_tmp re_a
+    set re_tmp2 TEXT[re_tmp]
+    whilel re_line_len 63
+    {
+        ifl re_tmp2 0 { set re_line_len re_line_len }
+        else
+        {
+            setarray re_line[re_line_len] re_tmp2
+            add re_line_len 1 add re_tmp 1
+        }
+        ifl re_tmp2 0 { exit } else { set re_tmp2 TEXT[re_tmp] }
+    }
+ends
+
+// in: re_a = character code. Appends one char.
+defstate re_line_append_char
+    ifl re_line_len 63 { setarray re_line[re_line_len] re_a add re_line_len 1 }
+ends
+
+// in: re_a = value 0..99. Appends two zero-padded digits.
+defstate re_line_append_2digits
+    set re_tmp re_a div re_tmp 10 add re_tmp 48
+    ifl re_line_len 63 { setarray re_line[re_line_len] re_tmp add re_line_len 1 }
+    set re_tmp re_a mod re_tmp 10 add re_tmp 48
+    ifl re_line_len 63 { setarray re_line[re_line_len] re_tmp add re_line_len 1 }
+ends
+
+// Upstream NativeText: 8x14 glyphs, 8 px advance, 16 px line pitch.
+defstate re_draw_line
+    set re_text_origin re_text_x
+    for re_i range re_line_len
+    {
+        set re_j re_line[re_i]
+        ife re_j 10 { set re_text_x re_text_origin add re_text_y 16 }
+        else ife re_j 32 { add re_text_x 8 }
+        else
+        {
+            ifl re_j 32 set re_j 63
+            ifg re_j 126 set re_j 63
+            set re_art_tile re_text_font add re_art_tile re_j sub re_art_tile 32
+            set re_art_x re_text_x set re_art_y re_text_y
+            state re_art
+            add re_text_x 8
+        }
+    }
+ends
+
+// in: re_a = TEXT offset, re_text_x/y/font set by caller.
+defstate re_draw_text
+    state re_line_from_text
+    state re_draw_line
+ends

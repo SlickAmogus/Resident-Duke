@@ -1,0 +1,250 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Constants and the RE gameplay state. Single player: all state is global and
+// is saved with the game. Names follow upstream JillPlayer fields.
+
+// ---- Original sounds (copied from USA/Sound at setup) ----------------------
+define RE_SND_CURSOR       2000
+define RE_SND_CANCEL       2001
+define RE_SND_DECIDE       2002
+define RE_SND_HANDGUN      2003
+define RE_SND_RELOAD       2004
+define RE_SND_MAGAZINE     2005
+define RE_SND_SHOTGUN      2006
+define RE_SND_PUMP         2007
+define RE_SND_BOX_OPEN     2008
+define RE_SND_BOX_SCROLL   2009
+define RE_SND_STEP_A       2010
+define RE_SND_STEP_B       2011
+define RE_SND_TYPE_A       2012
+define RE_SND_TYPE_B       2013
+define RE_SND_CASE_LAND    2014
+define RE_SND_SHELL_LAND   2015
+define RE_SND_SHELL_RELOAD 2016
+define RE_SND_DEATH        2017
+define RE_SND_BODY_THUD    2018
+define RE_SND_TITLE        2019
+definesound RE_SND_CURSOR       sounds/re1/cursor.wav       0 0 255 0 0
+definesound RE_SND_CANCEL       sounds/re1/cancel.wav       0 0 255 0 0
+definesound RE_SND_DECIDE       sounds/re1/decide.wav       0 0 255 0 0
+definesound RE_SND_HANDGUN      sounds/re1/handgun.wav      0 0 255 0 0
+definesound RE_SND_RELOAD       sounds/re1/reload.wav       0 0 255 0 0
+definesound RE_SND_MAGAZINE     sounds/re1/magazine.wav     0 0 255 0 0
+definesound RE_SND_SHOTGUN      sounds/re1/shotgun.wav      0 0 255 0 0
+definesound RE_SND_PUMP         sounds/re1/pump.wav         0 0 255 0 0
+definesound RE_SND_BOX_OPEN     sounds/re1/box-open.wav     0 0 255 0 0
+definesound RE_SND_BOX_SCROLL   sounds/re1/box-scroll.wav   0 0 255 0 0
+definesound RE_SND_STEP_A       sounds/re1/step-a.wav       0 0 200 0 0
+definesound RE_SND_STEP_B       sounds/re1/step-b.wav       0 0 200 0 0
+definesound RE_SND_TYPE_A       sounds/re1/type-a.wav       0 0 255 0 0
+definesound RE_SND_TYPE_B       sounds/re1/type-b.wav       0 0 255 0 0
+definesound RE_SND_CASE_LAND    sounds/re1/case-land.wav    0 0 150 0 0
+definesound RE_SND_SHELL_LAND   sounds/re1/shell-land.wav   0 0 150 0 0
+definesound RE_SND_SHELL_RELOAD sounds/re1/shell-reload.wav 0 0 255 0 0
+definesound RE_SND_DEATH        sounds/re1/death.wav        0 0 255 0 0
+definesound RE_SND_BODY_THUD    sounds/re1/body-thud.wav    0 0 255 0 0
+definesound RE_SND_TITLE        sounds/re1/title.wav        0 0 255 0 0
+
+// ---- Raw input bits (upstream controls.cfg values) --------------------------
+define RAW_AIM    8
+define RAW_RUN    64
+define RAW_ACTION 128
+define RAW_UP     4096
+define RAW_RIGHT  8192
+define RAW_DOWN   16384
+define RAW_LEFT   32768
+define RAW_DIRS   61440   // 0xf000
+// Duke input bits (macros.h).
+define SK_RUN_BIT       32          // 1<<5
+define SK_OPEN_BIT      536870912   // 1<<29
+define SK_INVENTORY_BIT 1073741824  // 1<<30
+define EK_FORWARD_BIT  1
+define EK_BACKWARD_BIT 2
+define EK_TURNLEFT_BIT 16
+define EK_TURNRIGHT_BIT 32
+define EK_ALTFIRE_BIT  64
+
+// ---- RE item ids (Globals.cpp) ----------------------------------------------
+define ITEM_HANDGUN 2
+define ITEM_SHOTGUN 3
+define ITEM_CLIP    11
+define ITEM_SHELLS  12
+define ITEM_RIBBON  47
+define ITEM_KEY     51     // 0x33 sword key
+define ITEM_HERB    68     // 0x44 green herb
+define ITEM_HERB_GG 71     // 0x47
+define ITEM_HERB_GGG 74    // 0x4a
+define RE_MAX_HEALTH 96
+
+// ---- Build/RE unit conversion ------------------------------------------------
+// One RE unit is 56/1800 Doom units (upstream) and one Doom unit is 8 Build xy
+// units here (tools/common.py DOOM_TO_BUILD): RE -> Build xy = 56/225.
+define RE_XY_NUM 56
+define RE_XY_DEN 225
+define CLIPMASK0 65537
+define CLIPMASK1 16777280   // (256<<16)+64
+define STAT_PARK_BASE 900   // world freeze parks status lists at 900+stat
+
+// ---- Text and tables loaded once per level ----------------------------------
+gamevar re_tables_loaded 0 0
+
+// ---- Jill state (upstream JillPlayer fields) --------------------------------
+gamearray re_ids 8
+gamearray re_qty 8
+gamevar re_used 0 0
+gamevar re_equipped 0 0
+gamevar re_examined 0 0
+gamevar re_behavior 0 0
+gamevar re_phase 0 0
+gamevar re_motion 0 0
+gamevar re_animframe 0 0
+gamevar re_prevpad 0 0
+gamevar re_pad 0 0
+gamevar re_pressed 0 0
+gamevar re_visible_weapon 0 0
+gamevar re_anim_timing 0 0
+gamevar re_anim_bank 0 0
+gamevar re_visible_armed 1 0
+gamevar re_speed 0 0
+gamevar re_run_stop 0 0
+gamevar re_idle_ticks 0 0
+gamevar re_aimflags 0 0
+gamevar re_blend 0 0
+gamevar re_raw 0 0
+gamevar re_prev_raw 0 0
+gamevar re_raw_edge 0 0
+gamevar re_ticks 0 0
+gamevar re_shown_frame 0 0
+gamevar re_reverse_pose 0 0
+gamevar re_aim_target -1 0
+gamevar re_aim_lock 0 0
+gamevar re_health 96 0
+gamevar re_started 0 0
+gamevar re_startup_cover 0 0
+gamevar re_menu_prev 0 0
+
+// Status screen and item box (BioCard.h 0x00be98e4: 48 shared slots).
+gamevar re_status_open 0 0
+gamevar re_selected 0 0
+gamevar re_combine_from -1 0
+gamevar re_action_menu 0 0
+gamevar re_action_option 0 0
+gamevar re_action_delay 0 0
+gamevar re_action_closing 0 0
+gamevar re_menu_fade 0 0
+gamevar re_menu_fade_mode 0 0
+gamevar re_menu_closing 0 0
+gamevar re_cursor_blink 0 0
+gamevar re_heal_sweep 0 0
+gamevar re_ecg_sweep 0 0
+gamevar re_ecg_secondary 0 0
+gamevar re_ecg_wave 0 0
+gamevar re_ecg_old_wave 0 0
+gamearray re_box_ids 48
+gamearray re_box_qty 48
+gamevar re_box_open 0 0
+gamevar re_box_state 0 0
+gamevar re_box_selected 0 0
+gamevar re_box_slide 0 0
+gamevar re_box_direction 0 0
+gamevar re_box_repeat_timer 0 0
+gamevar re_box_repeat_mask 0 0
+gamevar re_box_continue 0 0
+
+// Prompts, item viewer and message streams (Rendering.cpp UpdateMessageDisplay).
+gamevar re_prompt_kind 0 0
+gamevar re_choice 0 0
+gamevar re_prompt_a 0 0
+gamevar re_prompt_b 0 0
+gamevar re_message -1 0       // TEXT pool offset of the plain prompt line
+gamevar re_pending_pickup -1 0
+gamevar re_source_prompt 0 0
+gamevar re_message_item 0 0
+gamevar re_viewer_item 0 0
+gamevar re_viewer_step 0 0
+gamevar re_viewer_mode 0 0
+gamevar re_viewer_exiting 0 0
+gamevar re_viewer_description 0 0
+gamevar re_viewer_sprite -1 0
+gamearray re_msg_stream 256
+gamevar re_msg_page_start 0 0
+gamevar re_msg_length 0 0
+gamevar re_msg_offset 0 0
+gamevar re_msg_state 0 0
+gamevar re_msg_timer 0 0
+gamevar re_msg_blink 0 0
+gamevar re_cache_unlocked 0 0
+gamevar re_key_switch -1 0    // access switch sprite the sword key was used on
+
+// Typewriter (check_typewriter 0x0041bed0, check_typewriter_state 0x0041c330).
+gamevar re_save_state 0 0
+gamevar re_save_slot 0 0
+gamevar re_save_choice 0 0
+gamevar re_save_delay 0 0
+gamevar re_save_blink 0 0
+gamevar re_save_blink_timer 0 0
+gamearray re_save_rows 8
+gamevar re_save_counter 0 0
+gamevar re_save_reveal 0 0
+gamevar re_save_reveal_timer 0 0
+gamevar re_save_fade 0 0
+gamevar re_save_pending 0 0
+gamevar re_active_typewriter -1 0
+
+// Death (PlayerAnimations.cpp 0x459be0; DeathScreen.cpp 0x443090/0x443550).
+gamevar re_death_stage 0 0
+gamevar re_death_fall 0 0
+gamevar re_death_countdown 0 0
+gamevar re_death_fade 0 0
+gamevar re_death_fade_type 0 0
+gamevar re_death_machine 0 0
+gamevar re_death_image 0 0
+gamevar re_death_rect 0 0
+gamevar re_death_hold 0 0
+gamevar re_death_step_tick 0 0
+gamevar re_death_title_option 0 0
+gamevar re_death_sound_fade 0 0
+gamevar re_death_blood -1 0
+gamevar re_death_blood_w 0 0
+gamevar re_death_blood_h 0 0
+gamevar re_death_blood_timer 0 0
+gamevar re_death_angle 0 0
+gamevar re_death_request 0 0
+
+// World freeze, cameras and the visible Jill sprite.
+gamevar re_frozen 0 0
+gamevar re_jill -1 0
+gamevar re_cam -1 0
+gamevar re_cam_x 0 0
+gamevar re_cam_y 0 0
+gamevar re_cam_z 0 0
+gamevar re_cam_ang 0 0
+gamevar re_cam_horiz 100 0
+gamevar re_cam_sect 0 0
+gamevar re_music 0 0
+gamevar re_falling 0 0
+
+// Shared scratch registers for states (CON states take no parameters).
+gamevar re_a 0 0
+gamevar re_b 0 0
+gamevar re_c 0 0
+gamevar re_d 0 0
+gamevar re_result 0 0
+gamevar re_tmp 0 0
+gamevar re_tmp2 0 0
+gamevar re_tmp3 0 0
+gamevar re_i 0 0
+gamevar re_j 0 0
+gamevar re_k 0 0
+gamevar re_px 0 0
+gamevar re_py 0 0
+gamevar re_pz 0 0
+gamevar re_psect 0 0
+
+// Per-actor data for RE pickups (flag 2 = one value per sprite).
+gamevar re_pickup_id 0 2
+gamevar re_pickup_qty 0 2
+gamevar re_pickup_glint -1 2
+gamevar re_actor_ready 0 2
+
+// Developer diagnostics written to eduke32.log as CONLOG lines; off in normal play.
+gamevar re_debug 0 0

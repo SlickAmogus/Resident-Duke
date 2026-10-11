@@ -57,3 +57,13 @@ dependencies/re1/*
 !dependencies/re1/DROP-FILES-HERE.txt
 dependencies/gzdoom/*
 !dependencies/gzdoom/DROP-FILES-HERE.txt
+# Resident Duke: dependency drop folders and local runtime.
+dependencies/duke3d/*
+!dependencies/duke3d/DROP-FILES-HERE.txt
+dependencies/eduke32/*
+!dependencies/eduke32/DROP-FILES-HERE.txt
+*.grp
+*.GRP
+*.MAP
+*.map
+*.zip

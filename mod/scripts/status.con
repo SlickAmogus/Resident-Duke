@@ -1,0 +1,565 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Status screen, prompts, item viewer steps and the item box
+// (MainMenu.cpp menu state machines as adapted upstream).
+
+// ---- Sword key and locked door -------------------------------------------------
+// Upstream UseCache(): the RE key use. The original single required use leaves
+// the depleted key until the discard prompt. In E1L1 the sword key replaces the
+// red access card; using it grants Duke's red access so the original switch works.
+defstate re_use_cache
+    set re_a ITEM_KEY state re_find_item
+    ifl re_result 0 { set re_a 2 set re_b RE_STR_LOCKED state re_begin_prompt }
+    else
+    {
+        set re_cache_unlocked 1
+        set re_tmp re_qty[re_result] sub re_tmp 1 ifl re_tmp 0 set re_tmp 0
+        setarray re_qty[re_result] re_tmp
+        // Red access (got_access bit 2) for the original ACCESSSWITCH.
+        getplayer[THISACTOR].got_access re_tmp or re_tmp 2 setplayer[THISACTOR].got_access re_tmp
+        set re_a 5 set re_b -1 state re_begin_prompt
+    }
+ends
+
+// ---- Pickups --------------------------------------------------------------------
+// Upstream BeginPickup(item). in: re_a = pickup sprite.
+defstate re_begin_pickup
+    set re_pending_pickup re_a
+    set re_tmp re_a
+    set re_a RE_SND_DECIDE state re_sound
+    getactorvar[re_tmp].re_pickup_id re_a
+    getactorvar[re_tmp].re_pickup_qty re_b
+    state re_can_add_item
+    set re_c re_result
+    getactorvar[re_tmp].re_pickup_id re_d
+    ife re_c 0 { set re_a 2 set re_b RE_STR_CANT_CARRY state re_begin_prompt }
+    else { set re_a 1 set re_b -1 state re_begin_prompt }
+    set re_a re_d set re_b 2 state re_start_item_view
+ends
+
+// ---- Item box -------------------------------------------------------------------
+// Upstream CloseBox().
+defstate re_close_box
+    set re_box_open 0 set re_box_state 0
+    state re_sync_weapon_model
+    state re_update_freeze
+ends
+
+// Upstream OpenBox(); open_itembox 0x0041b990 (lid animation is a port gap).
+defstate re_open_box
+    set re_a RE_SND_BOX_OPEN state re_sound
+    set re_tmp 0
+    ifg re_prompt_kind 0 set re_tmp 1
+    ifn re_status_open 0 set re_tmp 1
+    ifn re_box_open 0 set re_tmp 1
+    ifge re_behavior 0x12 set re_tmp 1
+    ife re_tmp 0
+    {
+        set re_box_open 1 set re_box_state 1 set re_box_selected 0
+        ifg re_selected 7 set re_selected 7
+        set re_box_slide 0 set re_box_direction 0 set re_box_repeat_timer 15 set re_box_repeat_mask 0 set re_box_continue 0
+        state re_update_freeze
+    }
+ends
+
+// Source state 3 scroll: 15 steps, then three steps after the held repeat delay.
+defstate re_advance_box_slide
+    set re_tmp re_raw shiftr re_tmp 8 and re_tmp re_box_repeat_mask
+    ife re_tmp 0
+    {
+        set re_box_repeat_timer 15 set re_box_repeat_mask 0
+        set re_tmp2 re_raw and re_tmp2 0x1000
+        ifn re_tmp2 0 set re_box_repeat_mask 0x10
+        else { set re_tmp2 re_raw and re_tmp2 0x4000 ifn re_tmp2 0 set re_box_repeat_mask 0x40 }
+    }
+    else ifg re_box_repeat_timer 0 sub re_box_repeat_timer 1
+    add re_box_slide re_box_direction
+    ife re_box_slide 15 set re_box_slide 0
+    ife re_box_slide 0
+    {
+        set re_box_state 2
+        ifg re_box_direction 0 { add re_box_selected 1 mod re_box_selected 48 }
+        set re_box_direction 0
+    }
+ends
+
+// MainMenu.cpp menu_itembox_interaction 0x004941f0, states 1 and 2.
+defstate re_box_step
+    set re_tmp re_pressed and re_tmp 0x8000
+    ifl re_box_state 3 ifn re_tmp 0
+    {
+        ife re_box_state 2 set re_box_state 1 else state re_close_box
+    }
+    else ife re_box_state 1
+    {
+        set re_tmp re_pressed and re_tmp 0x4000
+        ifn re_tmp 0
+        {
+            ifl re_selected 0 state re_close_box
+            else { set re_box_state 2 set re_box_repeat_timer 15 set re_box_repeat_mask 0 set re_box_continue 0 }
+        }
+        else
+        {
+            set re_c re_selected mul re_c 2 add re_c 8
+            set re_tmp re_raw_edge and re_tmp 0xa000
+            set re_tmp2 re_c and re_tmp2 248
+            ifn re_tmp 0 ifn re_tmp2 0 xor re_c 2
+            set re_tmp re_raw_edge and re_tmp 0x1000
+            set re_tmp2 re_raw_edge and re_tmp2 0x4000
+            ifn re_tmp 0
+            {
+                sub re_c 4
+                set re_tmp3 re_c and re_tmp3 252
+                ife re_tmp3 0 { and re_c 2 or re_c 20 }
+            }
+            else ifn re_tmp2 0
+            {
+                add re_c 4
+                ifg re_c 22 { and re_c 2 or re_c 4 }
+            }
+            sub re_c 8 div re_c 2 set re_selected re_c
+        }
+    }
+    else ife re_box_state 2
+    {
+        set re_tmp re_pressed and re_tmp 0x4000
+        ifn re_tmp 0
+        {
+            set re_a re_selected set re_b re_box_selected state re_transfer_box
+            ife re_result 1 set re_box_state 1
+        }
+        else
+        {
+            set re_tmp re_raw_edge and re_tmp 0x5000
+            set re_tmp2 re_raw and re_tmp2 0x5000
+            ifn re_tmp 0 set re_tmp 1 else ifn re_box_continue 0 set re_tmp 1
+            ifn re_tmp 0
+            {
+                ife re_tmp2 0 { set re_box_repeat_timer 15 set re_box_repeat_mask 0 }
+                else
+                {
+                    set re_a RE_SND_BOX_SCROLL state re_sound
+                    set re_box_state 3 set re_box_continue 1
+                    set re_tmp re_raw and re_tmp 0x1000
+                    ifn re_tmp 0 { set re_box_slide 15 set re_box_direction -1 add re_box_selected 47 mod re_box_selected 48 }
+                    else { set re_box_slide 0 set re_box_direction 1 }
+                    set re_tmp re_raw shiftr re_tmp 8 and re_tmp re_box_repeat_mask
+                    ifn re_tmp 0 ife re_box_repeat_timer 0 mul re_box_direction 3
+                    state re_advance_box_slide
+                }
+            }
+        }
+    }
+    else state re_advance_box_slide
+ends
+
+// ---- Status screen ----------------------------------------------------------------
+// Upstream ToggleStatus().
+defstate re_toggle_status
+    ife re_prompt_kind 0
+    {
+        ifn re_status_open 0 set re_a RE_SND_CANCEL else set re_a RE_SND_DECIDE
+        state re_sound
+        ifn re_box_open 0 state re_close_box
+        else ifn re_status_open 0 { set re_menu_fade 0 set re_menu_fade_mode 2 set re_menu_closing 1 }
+        else
+        {
+            set re_status_open 1 set re_combine_from -1 set re_action_menu 0 set re_action_closing 0
+            set re_selected 0 set re_cursor_blink 0 set re_ecg_sweep 132 set re_ecg_secondary 132
+            set re_menu_fade 0x7fff set re_menu_fade_mode 1
+            state re_update_freeze
+        }
+    }
+ends
+
+// Upstream CancelStatus().
+defstate re_cancel_status
+    ifn re_action_menu 0 { set re_action_closing 1 set re_action_delay 8 }
+    else ifge re_combine_from 0 set re_combine_from -1
+    else state re_toggle_status
+ends
+
+// Upstream MenuVisualStep(): fades and the ECG sweep.
+defstate re_menu_visual_step
+    ife re_menu_fade_mode 1
+    {
+        sub re_menu_fade 0x1800 ifl re_menu_fade 0 { set re_menu_fade 0 set re_menu_fade_mode 0 }
+    }
+    else ife re_menu_fade_mode 2
+    {
+        add re_menu_fade 0xc00
+        ifge re_menu_fade 0x8000
+        {
+            set re_menu_fade 0x7fff set re_menu_fade_mode 3 set re_status_open 0 set re_box_open 0
+            state re_sync_weapon_model
+        }
+    }
+    else ife re_menu_fade_mode 3
+    {
+        sub re_menu_fade 0x1800
+        ifl re_menu_fade 0 { set re_menu_fade 0 set re_menu_fade_mode 0 set re_menu_closing 0 state re_update_freeze }
+    }
+    sub re_cursor_blink 1
+    ifg re_heal_sweep 0
+    {
+        sub re_heal_sweep 2
+        ifl re_heal_sweep 84 { set re_heal_sweep 0 set re_ecg_sweep 132 set re_ecg_secondary 132 }
+    }
+    else
+    {
+        add re_ecg_sweep 1
+        set re_tmp 0 ifg re_ecg_sweep 131 set re_tmp 1 ifl re_ecg_sweep 53 set re_tmp 1
+        ifn re_tmp 0
+        {
+            set re_ecg_sweep 53
+            randvar re_tmp2 3
+            set re_tmp3 re_ecg_wave and re_tmp3 3
+            ife re_tmp2 re_tmp3 { add re_tmp2 1 and re_tmp2 3 }
+            set re_tmp re_health sub re_tmp 1 div re_tmp 24 ifl re_tmp 0 set re_tmp 0
+            mul re_tmp 4 add re_tmp re_tmp2 set re_ecg_wave re_tmp
+        }
+        add re_ecg_secondary 1
+        set re_tmp 0 ifg re_ecg_secondary 131 set re_tmp 1 ifl re_ecg_secondary 22 set re_tmp 1
+        ifn re_tmp 0 { set re_ecg_secondary re_ecg_sweep sub re_ecg_secondary 31 set re_ecg_old_wave re_ecg_wave }
+    }
+ends
+
+// Upstream UseSelected().
+defstate re_use_selected
+    ifge re_selected 0 ifl re_selected re_used
+    {
+        set re_a re_ids[re_selected]
+        set re_tmp 0
+        ife re_a ITEM_HANDGUN set re_tmp 1
+        ife re_a ITEM_SHOTGUN set re_tmp 1
+        ifn re_tmp 0 { ife re_equipped re_selected set re_equipped -1 else set re_equipped re_selected }
+        else
+        {
+            state re_is_herb
+            ifn re_result 0
+            {
+                // menu_item_use_heal 0x00401260: integer maxHealth/3; refused at full health.
+                ifl re_health RE_MAX_HEALTH
+                {
+                    state re_item_index
+                    set re_tmp ITEM_HEAL[re_result] mul re_tmp RE_MAX_HEALTH div re_tmp 3
+                    add re_health re_tmp ifg re_health RE_MAX_HEALTH set re_health RE_MAX_HEALTH
+                    setactor[THISACTOR].extra re_health
+                    set re_heal_sweep 175
+                    set re_tmp re_qty[re_selected] sub re_tmp 1 setarray re_qty[re_selected] re_tmp
+                    ife re_tmp 0 { set re_a re_selected state re_remove_slot }
+                }
+            }
+            else ife re_a ITEM_KEY
+            {
+                // Using the key from the menu works at the locked switch.
+                state re_find_key_switch
+                ifge re_result 0 ife re_cache_unlocked 0 { set re_status_open 0 state re_use_cache }
+            }
+        }
+    }
+ends
+
+// Upstream CombineSelected(); the cursor is the second item, the target the first.
+defstate re_combine_selected
+    ifl re_combine_from 0 set re_combine_from re_selected
+    else
+    {
+        set re_c re_combine_from set re_d re_selected set re_combine_from -1
+        ifl re_c re_used ifl re_d re_used ifn re_c re_d
+        {
+            set re_a re_ids[re_d] set re_b re_ids[re_c] state re_recipe
+            set re_k re_result
+            set re_a re_ids[re_d] state re_is_herb
+            ifge re_k 0 ife re_result 1 ifn re_ids[re_d] ITEM_HERB_GGG
+            {
+                set re_prompt_a re_d set re_prompt_b re_c
+                set re_a 3 set re_b -1 state re_begin_prompt
+            }
+            else
+            {
+                // Gun + matching ammo: load the magazine.
+                set re_tmp re_ids[re_c] set re_tmp2 re_ids[re_d]
+                set re_i -1 set re_j -1
+                ife re_tmp ITEM_HANDGUN ife re_tmp2 ITEM_CLIP { set re_i re_c set re_j re_d }
+                ife re_tmp ITEM_SHOTGUN ife re_tmp2 ITEM_SHELLS { set re_i re_c set re_j re_d }
+                ife re_tmp2 ITEM_HANDGUN ife re_tmp ITEM_CLIP { set re_i re_d set re_j re_c }
+                ife re_tmp2 ITEM_SHOTGUN ife re_tmp ITEM_SHELLS { set re_i re_d set re_j re_c }
+                ifge re_k 0 ifge re_i 0
+                {
+                    set re_a 15 ife re_ids[re_i] ITEM_SHOTGUN set re_a 7
+                    sub re_a re_qty[re_i]
+                    ifg re_a re_qty[re_j] set re_a re_qty[re_j]
+                    set re_tmp re_qty[re_i] add re_tmp re_a setarray re_qty[re_i] re_tmp
+                    set re_tmp re_qty[re_j] sub re_tmp re_a setarray re_qty[re_j] re_tmp
+                    ife re_tmp 0 { set re_a re_j state re_remove_slot }
+                }
+                else
+                {
+                    // Same ammo type: merge stacks up to 250.
+                    set re_tmp 0
+                    ife re_ids[re_c] re_ids[re_d] { ife re_ids[re_c] ITEM_CLIP set re_tmp 1 ife re_ids[re_c] ITEM_SHELLS set re_tmp 1 }
+                    ifge re_k 0 ifn re_tmp 0
+                    {
+                        set re_a 250 sub re_a re_qty[re_d]
+                        ifg re_a re_qty[re_c] set re_a re_qty[re_c]
+                        set re_tmp re_qty[re_d] add re_tmp re_a setarray re_qty[re_d] re_tmp
+                        set re_tmp re_qty[re_c] sub re_tmp re_a setarray re_qty[re_c] re_tmp
+                        ife re_tmp 0 { set re_a re_c state re_remove_slot }
+                    }
+                    else
+                    {
+                        // Two herbs without a recipe: refused silently, as upstream.
+                        set re_a re_ids[re_c] state re_is_herb set re_tmp re_result
+                        set re_a re_ids[re_d] state re_is_herb
+                        ifn re_tmp 0 { ife re_result 0 set re_tmp 0 }
+                        ife re_tmp 0
+                        {
+                            set re_prompt_a re_c set re_prompt_b re_d
+                            set re_a 4 set re_b RE_STR_MOVE state re_begin_prompt
+                        }
+                    }
+                }
+            }
+        }
+    }
+ends
+
+// ---- Prompt confirmation -------------------------------------------------------------
+// Upstream ConfirmPrompt().
+gamevar re_confirm_kind 0 0
+defstate re_confirm_prompt
+    set re_a RE_SND_DECIDE state re_sound
+    ifg re_viewer_item 0 set re_viewer_exiting 1
+    set re_confirm_kind re_prompt_kind set re_prompt_kind 0 set re_source_prompt 0
+    ife re_confirm_kind 1
+    {
+        set re_k re_pending_pickup set re_pending_pickup -1
+        ife re_choice 0 ifge re_k 0
+        {
+            getactorvar[re_k].re_pickup_id re_a getactorvar[re_k].re_pickup_qty re_b
+            state re_can_add_item
+            ife re_result 0
+            {
+                set re_pending_pickup re_k
+                set re_a 2 set re_b RE_STR_CANT_CARRY state re_begin_prompt
+                getactorvar[re_k].re_pickup_id re_a set re_b 2 state re_start_item_view
+            }
+            else
+            {
+                getactorvar[re_k].re_pickup_id re_a getactorvar[re_k].re_pickup_qty re_b
+                state re_add_item
+                ifn re_result 0
+                {
+                    // Taken: hide the world pickup and its glint.
+                    setactor[re_k].cstat 32768 setactorvar[re_k].re_pickup_id 0
+                    getactorvar[re_k].re_pickup_glint re_tmp
+                    ifge re_tmp 0 setactor[re_tmp].cstat 32768
+                }
+            }
+        }
+    }
+    else ife re_confirm_kind 7 { ife re_choice 0 state re_open_typewriter_menu }
+    else ife re_confirm_kind 2 set re_pending_pickup -1
+    else ife re_confirm_kind 3
+    {
+        ife re_choice 0
+        {
+            set re_a re_ids[re_prompt_a] set re_b re_ids[re_prompt_b] state re_recipe
+            ifge re_result 0
+            {
+                setarray re_ids[re_prompt_a] RECIPE_NEWA[re_result]
+                setarray re_qty[re_prompt_a] 1
+                setarray re_ids[re_prompt_b] RECIPE_NEWB[re_result]
+                ife re_ids[re_prompt_b] 0 { set re_a re_prompt_b state re_remove_slot }
+            }
+        }
+    }
+    else ife re_confirm_kind 4
+    {
+        ife re_choice 0
+        {
+            set re_tmp re_ids[re_prompt_a] set re_tmp2 re_qty[re_prompt_a]
+            setarray re_ids[re_prompt_a] re_ids[re_prompt_b] setarray re_qty[re_prompt_a] re_qty[re_prompt_b]
+            setarray re_ids[re_prompt_b] re_tmp setarray re_qty[re_prompt_b] re_tmp2
+            ife re_equipped re_prompt_a set re_equipped re_prompt_b
+            else ife re_equipped re_prompt_b set re_equipped re_prompt_a
+        }
+    }
+    else ife re_confirm_kind 5 { set re_a 6 set re_b -1 state re_begin_prompt }
+    else ife re_confirm_kind 6
+    {
+        ife re_choice 0
+        {
+            set re_a ITEM_KEY state re_find_item
+            ifge re_result 0 ife re_qty[re_result] 0 { set re_a re_result state re_remove_slot }
+        }
+    }
+    state re_update_freeze
+ends
+
+// Upstream PromptStep(). Left/right edges toggle the choice; only a fresh
+// action confirms (Rendering.cpp UpdateMessageDisplay state 4).
+defstate re_prompt_step
+    set re_tmp 1
+    ifn re_source_prompt 0 ife re_viewer_item 0
+    {
+        state re_source_message_step
+        ifn re_msg_state 4 ifn re_msg_state 5 set re_tmp 0
+    }
+    ifn re_tmp 0
+    {
+        set re_tmp 0
+        ife re_prompt_kind 2 set re_tmp 1
+        ife re_prompt_kind 5 set re_tmp 1
+        ife re_prompt_kind 8 set re_tmp 1
+        ifn re_tmp 0
+        {
+            set re_tmp re_pressed and re_tmp 0xc000
+            ifn re_tmp 0 state re_confirm_prompt
+        }
+        else
+        {
+            set re_tmp re_pressed and re_tmp 0x4000
+            ifn re_tmp 0 state re_confirm_prompt
+            else
+            {
+                set re_tmp re_raw_edge and re_tmp 0xa000
+                ifn re_tmp 0 { xor re_choice 1 set re_msg_blink 255 }
+            }
+        }
+    }
+ends
+
+// Upstream ItemViewStep(): intro rotation, prompt, description, exit.
+defstate re_item_view_step
+    ifn re_viewer_exiting 0
+    {
+        ifg re_viewer_step 0
+        {
+            set re_tmp 1 ife re_viewer_mode 2 set re_tmp 2
+            sub re_viewer_step re_tmp ifl re_viewer_step 0 set re_viewer_step 0
+            state re_update_item_view_model
+        }
+        else
+        {
+            set re_tmp re_viewer_mode
+            state re_stop_item_view
+            ife re_tmp 1 { set re_action_menu 1 set re_action_option 1 set re_action_delay 0 set re_action_closing 0 }
+            else ife re_status_open 0 ife re_box_open 0 state re_sync_weapon_model
+        }
+    }
+    else ifl re_viewer_step 64
+    {
+        set re_tmp 1 ife re_viewer_mode 2 set re_tmp 2
+        add re_viewer_step re_tmp ifg re_viewer_step 64 set re_viewer_step 64
+        state re_update_item_view_model
+        ife re_viewer_step 64 ife re_viewer_mode 2
+        {
+            set re_source_prompt 1
+            set re_a 2 ife re_prompt_kind 1 set re_a 0
+            state re_start_source_message
+            state re_source_message_step
+        }
+    }
+    else ife re_viewer_mode 2
+    {
+        state re_source_message_step
+        set re_tmp 0 ife re_msg_state 4 set re_tmp 1 ife re_msg_state 5 set re_tmp 1
+        ifn re_tmp 0 state re_prompt_step
+    }
+    else ifn re_viewer_description 0
+    {
+        state re_source_message_step
+        set re_tmp re_pressed and re_tmp 0xc000
+        ife re_msg_state 5 ifn re_tmp 0 set re_viewer_description 0
+    }
+    else
+    {
+        set re_tmp re_pressed and re_tmp 0x8000
+        set re_tmp2 re_pressed and re_tmp2 0x4000
+        ifn re_tmp 0 { set re_a RE_SND_CANCEL state re_sound set re_viewer_exiting 1 }
+        else ifn re_tmp2 0
+        {
+            set re_a RE_SND_DECIDE state re_sound
+            set re_viewer_description 1
+            // Examining an item reveals its true name (examine flag).
+            set re_a re_viewer_item state re_item_index
+            ifge re_result 0
+            {
+                set re_tmp ITEM_EXAMINE_FLAG[re_result]
+                ifl re_tmp 128 { set re_tmp2 1 shiftl re_tmp2 re_tmp or re_examined re_tmp2 }
+                set re_a ITEM_DESC_TEXT[re_result]
+                state re_start_description_message
+                state re_source_message_step
+            }
+        }
+    }
+ends
+
+// Upstream StatusAction(): USE / CHECK / COMBINE.
+defstate re_status_action
+    set re_action_closing 1 set re_action_delay 8
+    ifge re_selected 0
+    {
+        ife re_action_option 0 state re_use_selected
+        else ife re_action_option 1 { set re_action_menu 0 set re_a re_ids[re_selected] set re_b 1 state re_start_item_view }
+        else state re_combine_selected
+    }
+ends
+
+// Status screen input (upstream MovePlayer status branch).
+defstate re_status_step
+    set re_tmp re_pressed and re_tmp 0x8000
+    ifn re_tmp 0 state re_cancel_status
+    else ifn re_action_menu 0
+    {
+        ifn re_action_closing 0
+        {
+            sub re_action_delay 1
+            ifle re_action_delay 0 { set re_action_menu 0 set re_action_closing 0 }
+        }
+        else ifg re_action_delay 0 sub re_action_delay 1
+        else
+        {
+            set re_tmp re_pressed and re_tmp 1
+            ifn re_tmp 0 { sub re_action_option 1 ifl re_action_option 0 set re_action_option 0 }
+            set re_tmp re_pressed and re_tmp 4
+            ifn re_tmp 0 { add re_action_option 1 ifg re_action_option 2 set re_action_option 2 }
+            set re_tmp re_pressed and re_tmp 0x4000
+            ifn re_tmp 0 state re_status_action
+        }
+    }
+    else
+    {
+        set re_c re_selected mul re_c 2 add re_c 8
+        set re_tmp re_raw_edge and re_tmp 0xa000
+        ifn re_tmp 0 xor re_c 2
+        set re_tmp re_raw_edge and re_tmp 0x1000
+        set re_tmp2 re_raw_edge and re_tmp2 0x4000
+        ifn re_tmp 0
+        {
+            set re_tmp3 re_c and re_tmp3 252
+            ife re_tmp3 0 add re_c 20 else sub re_c 4
+        }
+        else ifn re_tmp2 0
+        {
+            add re_c 4
+            ifg re_c 22 and re_c 2
+        }
+        sub re_c 8 div re_c 2 set re_selected re_c
+        set re_tmp re_raw_edge and re_tmp 0xf000
+        ifn re_tmp 0 set re_cursor_blink 0
+        set re_tmp re_pressed and re_tmp 0x4000
+        ifn re_tmp 0
+        {
+            // selected -1 is the EXIT tab; MAP/FILE/RADIO are outside the slice.
+            ife re_selected -1 state re_toggle_status
+            else ifge re_selected 0
+            {
+                ifge re_combine_from 0 state re_combine_selected
+                else ifl re_selected re_used
+                { set re_action_menu 1 set re_action_option 0 set re_action_delay 8 set re_action_closing 0 }
+            }
+        }
+    }
+ends

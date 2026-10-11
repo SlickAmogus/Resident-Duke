@@ -1,0 +1,140 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Rendering.cpp UpdateMessageDisplay states 0/1/2/4/5 for the source message
+// streams used by pickups, herbs, the sword key and typewriters. Item-name
+// tags (code 6) expand into the stream without extra delay, as upstream.
+
+defstate re_msg_delay  // out: re_msg_timer reset (1 during a pickup viewer, else 2)
+    set re_msg_timer 2
+    ife re_viewer_mode 2 { ifg re_viewer_item 0 set re_msg_timer 1 }
+ends
+
+// Upstream StartSourceMessage(id). in: re_a = global message id.
+gamevar re_msg_table -1 0
+gamevar re_msg_name_item 0 0
+defstate re_start_source_message
+    set re_msg_page_start 0 set re_msg_length 0 set re_msg_offset 0 set re_msg_state 0 set re_msg_blink 0
+    state re_msg_delay
+    set re_msg_table -1
+    for re_tmp range RE_MESSAGES
+    {
+        ife MSG_ID[re_tmp] re_a set re_msg_table re_tmp
+    }
+    ifge re_msg_table 0
+    {
+        // Item shown by the name tag: pending pickup, else message item, else viewer item.
+        set re_msg_name_item re_viewer_item
+        ifn re_message_item 0 set re_msg_name_item re_message_item
+        ifge re_pending_pickup 0 getactorvar[re_pending_pickup].re_pickup_id re_msg_name_item
+        set re_i MSG_START[re_msg_table]
+        set re_j re_i add re_j MSG_LENGTH[re_msg_table]
+        whilel re_i re_j
+        {
+            set re_k MSG_BYTES[re_i]
+            ife re_k 6
+            {
+                add re_i 1
+                set re_a re_msg_name_item state re_item_name
+                set re_tmp re_result
+                set re_tmp2 TEXT[re_tmp]
+                whilen re_tmp2 -1
+                {
+                    ifl re_msg_length 254
+                    {
+                        set re_tmp3 ASCII_TO_CODE[re_tmp2]
+                        setarray re_msg_stream[re_msg_length] re_tmp3
+                        add re_msg_length 1
+                    }
+                    add re_tmp 1 set re_tmp2 TEXT[re_tmp]
+                }
+            }
+            else ifl re_msg_length 255
+            {
+                setarray re_msg_stream[re_msg_length] re_k
+                add re_msg_length 1
+            }
+            add re_i 1
+        }
+        set re_msg_state 1
+    }
+ends
+
+// Upstream StartDescriptionMessage(text). in: re_a = TEXT offset.
+defstate re_start_description_message
+    set re_msg_page_start 0 set re_msg_length 0 set re_msg_offset 0 set re_msg_state 1 set re_msg_blink 0
+    state re_msg_delay
+    set re_tmp re_a set re_tmp2 TEXT[re_tmp]
+    whilen re_tmp2 -1
+    {
+        ifl re_msg_length 254
+        {
+            ife re_tmp2 10 set re_tmp3 2 else set re_tmp3 ASCII_TO_CODE[re_tmp2]
+            setarray re_msg_stream[re_msg_length] re_tmp3
+            add re_msg_length 1
+        }
+        add re_tmp 1 set re_tmp2 TEXT[re_tmp]
+    }
+    setarray re_msg_stream[re_msg_length] 1 add re_msg_length 1
+    setarray re_msg_stream[re_msg_length] 0 add re_msg_length 1
+ends
+
+// Upstream SourceMessageStep(): reveal one glyph per delay; page breaks wait.
+gamevar re_msg_done 0 0
+defstate re_source_message_step
+    ife re_msg_state 2
+    {
+        set re_tmp re_pressed and re_tmp 0xc000
+        ifn re_tmp 0 { set re_msg_page_start re_msg_offset set re_msg_state 1 state re_msg_delay }
+    }
+    else ifn re_msg_state 1
+    {
+        sub re_msg_blink 1 and re_msg_blink 255
+    }
+    else
+    {
+        sub re_msg_timer 1 and re_msg_timer 255
+        ife re_msg_timer 0
+        {
+            set re_msg_done 0
+            whilel re_msg_offset re_msg_length
+            {
+                ife re_msg_done 0
+                {
+                    set re_k re_msg_stream[re_msg_offset]
+                    ife re_k 8 { set re_msg_state 4 set re_msg_done 1 }
+                    else ife re_k 1 { set re_msg_state 5 set re_msg_done 1 }
+                    else ife re_k 3 { add re_msg_offset 2 set re_msg_state 2 set re_msg_done 1 }
+                    else ife re_k 2 { add re_msg_offset 1 }
+                    else ife re_k 5 { add re_msg_offset 2 }
+                    else { add re_msg_offset 1 state re_msg_delay set re_msg_done 1 }
+                }
+                ifn re_msg_done 0 exit
+            }
+        }
+    }
+ends
+
+// Upstream BeginPrompt(kind, text). in: re_a = kind, re_b = TEXT offset (-1 none).
+// Kinds: 1 take item, 2 notice, 3 mix herbs, 4 move items, 5 key used,
+// 6 discard key, 7 typewriter save?, 8 typewriter without ribbon.
+defstate re_begin_prompt
+    set re_prompt_kind re_a set re_choice 0 set re_message re_b set re_action_menu 0
+    state re_update_freeze
+    set re_source_prompt 0
+    ife re_prompt_kind 3 set re_source_prompt 1
+    ife re_prompt_kind 5 set re_source_prompt 1
+    ife re_prompt_kind 6 set re_source_prompt 1
+    ife re_prompt_kind 7 set re_source_prompt 1
+    ife re_prompt_kind 8 set re_source_prompt 1
+    set re_message_item 0
+    ife re_prompt_kind 5 set re_message_item ITEM_KEY
+    ifn re_source_prompt 0
+    {
+        set re_a 7
+        ife re_prompt_kind 7 set re_a 31
+        ife re_prompt_kind 8 set re_a 30
+        ife re_prompt_kind 3 set re_a 53
+        ife re_prompt_kind 5 set re_a 3
+        state re_start_source_message
+        state re_source_message_step
+    }
+ends

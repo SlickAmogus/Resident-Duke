@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Original Jill body/W10/W12 banks, joint-14 replacement and RE1 RotMatrix.
+# SPDX-License-Identifier: GPL-3.0-only
+"""Original Jill body/W10/W12/W13 banks, joint-14 replacement and RE1 RotMatrix.
 Geometry is baked from original skeletal frames; no added gun or guessed pose.
+Each skeletal frame becomes one MD3 frame; EDuke32 maps one tile per frame.
 """
-from pathlib import Path
 import struct,json,math
 import numpy as np
 from PIL import Image
-ROOT=Path(__file__).resolve().parents[1];REF=ROOT/'assets/reference/USA';OUT=ROOT/'mod/models/jill'
+from common import ROOT,REF,STAGE
+OUT=STAGE/'models/jill';OUT.mkdir(parents=True,exist_ok=True)
 u16=lambda b,o:struct.unpack_from('<H',b,o)[0];u32=lambda b,o:struct.unpack_from('<I',b,o)[0]
 emd=(REF/'Enemy/CHAR11.EMD').read_bytes();w12=(REF/'Players/W12.EMW').read_bytes();w10=(REF/'Players/W10.EMW').read_bytes();w13=(REF/'Players/W13.EMW').read_bytes()
 _,emr,edd,tmd,tim=struct.unpack_from('<5I',emd,len(emd)-20)
@@ -62,7 +64,7 @@ for armed,name in [(True,'jill.md3'),(False,'jill-unarmed.md3'),(True,'jill-shot
  surfaces=[];bounds=[];nf=len(poses)
  for j in range(joints):
   points,norms,uv,triangles=(shotgun if name=="jill-shotgun.md3" else weapon) if armed and j==14 else body[j];n=len(points);nt=len(triangles);ot=108;os=ot+nt*12;ost=os+68;ox=ost+n*8;end=ox+nf*n*8
-  blob=bytearray(struct.pack('<4s64s10i',b'IDP3',('joint%d'%j).encode(),0,nf,1,n,nt,ot,os,ost,ox,end));blob.extend(b''.join(struct.pack('<3i',*t) for t in triangles));blob.extend(struct.pack('<64si',b'models/jill/skin.png',0));blob.extend(b''.join(struct.pack('<2f',*t) for t in uv))
+  blob=bytearray(struct.pack('<4s64s10i',b'IDP3',('joint%d'%j).encode(),0,nf,1,n,nt,ot,os,ost,ox,end));blob.extend(b''.join(struct.pack('<3i',*t) for t in triangles));blob.extend(struct.pack('<64si',b'skin.png',0));blob.extend(b''.join(struct.pack('<2f',*t) for t in uv))
   for pose in poses:
    r,t=pose[j];v=coord(apply_vertices(r,points)+t,56/1800);norm=coord(apply_vertices(r,norms),1);norm/=np.maximum(np.linalg.norm(norm,axis=1)[:,None],1)
    yaw=np.arctan2(norm[:,1],norm[:,0]);pitch=np.arccos(np.clip(norm[:,2],-1,1));enc=((np.round(pitch*255/math.tau).astype(int)&255)<<8)|(np.round(yaw*255/math.tau).astype(int)&255)
@@ -73,7 +75,5 @@ for armed,name in [(True,'jill.md3'),(False,'jill-unarmed.md3'),(True,'jill-shot
  for s in surfaces:blob.extend(s)
  (OUT/name).write_bytes(blob)
 (ROOT/'assets/animation-manifest.json').write_text(json.dumps(manifest,indent=2))
-(ROOT/'assets/model-fidelity.json').write_text(json.dumps(dict(frames=len(poses),joints=joints,parents=parents,weapon_joint=14,weapon_vertices=len(weapon[0]),weapon_source='Players/W12.EMW',rotation='GteRotationMatrixCalc(-x,y,-z), Q14 truncations -> Q12',animation='Live source Joint_move integer angle/root blends via original rigid joint parts; baked models retained for comparison.',limitation='Host Euler rotations cannot represent Q12 nonorthogonality exactly; see logs/joint-renderer-measurement.json. Reload physics joint15 not yet rendered.'),indent=2))
+(ROOT/'assets/model-fidelity.json').write_text(json.dumps(dict(frames=len(poses),joints=joints,parents=parents,weapon_joint=14,weapon_vertices=len(weapon[0]),weapon_source='Players/W12.EMW',rotation='GteRotationMatrixCalc(-x,y,-z), Q14 truncations -> Q12',animation='Baked per-frame original skeletal poses; EDuke32 model frame interpolation stands in for Joint_move blending.',limitation='Joint_move blend weights are not reproduced exactly; reload physics joint15 not rendered.'),indent=2))
 print('Original skeletal banks:',len(poses),'frames; joint14 replaced with actual W12 mesh,',len(weapon[0]),'face vertices.')
-from joint_renderer_assets import export
-export(ROOT,body,weapon,parents,translations,frame_roots,frame_angles,shotgun)

@@ -1,0 +1,57 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Original IVM item viewer. Upstream rendered the model through a camera
+// texture in a disconnected black sector; here the same kind of sector is
+// appended to E1L1 and drawn with showview into the original 160x120 window.
+// MainMenu: focal length 192 for that window; Build's 90 degree projection
+// has focal 80, so view distances are scaled by 80/192 = 5/12.
+
+define RE_VIEW_FOCAL_NUM 5
+define RE_VIEW_FOCAL_DEN 12
+
+gamevar re_view_dist 0 0
+// Upstream UpdateItemViewModel(): pose step, zoom -0xaf00+step*0x322, light fade.
+defstate re_update_item_view_model
+    ifge re_viewer_sprite 0
+    {
+        set re_a re_viewer_item state re_item_index
+        ifl re_result 0 set re_result 0
+        set re_tmp ITEM_VIEW[re_result] mul re_tmp 65 add re_tmp RE_T_ITEMVIEW add re_tmp re_viewer_step
+        setactor[re_viewer_sprite].picnum re_tmp
+        // Camera-to-model distance in RE units: 15000 - zoom.
+        set re_tmp re_viewer_step mul re_tmp 0x322 sub re_tmp 0xaf00
+        set re_view_dist 15000 sub re_view_dist re_tmp
+        mul re_view_dist RE_XY_NUM div re_view_dist RE_XY_DEN
+        mul re_view_dist RE_VIEW_FOCAL_NUM div re_view_dist RE_VIEW_FOCAL_DEN
+        // Original light fade interval (255-(64-step)*4)/255 as Build shade.
+        set re_tmp 64 sub re_tmp re_viewer_step shiftr re_tmp 1
+        setactor[re_viewer_sprite].shade re_tmp
+    }
+ends
+
+// Upstream StartItemView(id, mode). in: re_a = id, re_b = mode (1 examine, 2 pickup).
+defstate re_start_item_view
+    set re_viewer_item re_a set re_viewer_mode re_b set re_viewer_step 0
+    set re_viewer_exiting 0 set re_viewer_description 0
+    ife re_viewer_sprite -1
+    {
+        espawn RE_T_ITEMVIEW
+        set re_viewer_sprite RETURN
+        changespritestat re_viewer_sprite 0
+        setactor[re_viewer_sprite].cstat 0
+        setactor[re_viewer_sprite].xrepeat 64
+        setactor[re_viewer_sprite].yrepeat 64
+        setactor[re_viewer_sprite].ang 0
+        setsprite re_viewer_sprite RE_VIEWER_X RE_VIEWER_Y RE_VIEWER_Z
+        changespritesect re_viewer_sprite RE_VIEWER_SECTOR
+    }
+    setactor[re_viewer_sprite].cstat 0
+    state re_update_item_view_model
+    state re_update_freeze
+ends
+
+// Upstream StopItemView(). The scene sprite is kept (hidden) for reuse.
+defstate re_stop_item_view
+    ifge re_viewer_sprite 0 setactor[re_viewer_sprite].cstat 32768
+    set re_viewer_item 0 set re_viewer_exiting 0 set re_viewer_description 0
+    state re_update_freeze
+ends
