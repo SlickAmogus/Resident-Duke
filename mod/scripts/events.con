@@ -84,8 +84,13 @@ onevent EVENT_PREWORLD
         getactor[re_dmg_spr].htextra re_dmg
         ifg re_dmg 0
         {
+            // Doubled only when a Duke enemy caused it (tile badguy flags), not explosives.
             getactor[re_dmg_spr].htowner re_tmp
-            ifge re_tmp 0 { getactor[re_tmp].statnum re_tmp2 ife re_tmp2 1 mul re_dmg 2 }
+            ifge re_tmp 0
+            {
+                getactor[re_tmp].picnum re_tmp2 gettiledata[re_tmp2].gameflags re_tmp2
+                and re_tmp2 RE_ENEMY_FLAGS ifn re_tmp2 0 mul re_dmg 2
+            }
             ife re_death_stage 0 ifg re_health 0 { sub re_health re_dmg ifl re_health 0 set re_health 0 }
             setactor[re_dmg_spr].htextra -1
         }
@@ -131,7 +136,7 @@ onevent EVENT_PROCESSINPUT
         ife re_tmp 0
         {
             getplayer[THISACTOR].posx re_a getplayer[THISACTOR].posy re_b getplayer[THISACTOR].ang re_c
-            al re_raw al re_behavior al re_a al re_b al re_c al re_cam al re_save_state al re_save_blink al re_pressed al re_menu_fade_mode
+            al re_raw al re_behavior al re_a al re_b al re_c al re_cam al re_save_state al re_aimflags al re_pad al re_health
         }
     }
     // Camera: Jill's position, mid-body height and sector.

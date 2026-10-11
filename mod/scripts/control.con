@@ -103,8 +103,30 @@ ends
 
 // ---- Targeting --------------------------------------------------------------------
 // player_reticle_enemy 0x00496910: nearest visible target. Build sight checks
-// replace RDT boundaries.
+// replace RDT boundaries. Duke-world adaptation: when no enemy is in view,
+// Duke's explosive objects (charges, barrels, extinguishers) are targeted, so
+// map progress that Duke gets by shooting them (the E1L1 rooftop vent charge)
+// stays possible with RE aiming.
+define SEENINE_TILE 1247
 gamevar re_best 0 0
+gamevar re_tg 0 0
+// in: re_a = sprite. out: re_result = 1 for a visible explosive object.
+defstate re_is_object_target
+    set re_result 0
+    getactor[re_a].picnum re_tg
+    ife re_tg SEENINE_TILE set re_result 1
+    ife re_tg 1238 set re_result 1   // EXPLODINGBARREL
+    ife re_tg 1239 set re_result 1   // EXPLODINGBARREL2
+    ife re_tg 1227 set re_result 1   // NUKEBARREL
+    ife re_tg 1079 set re_result 1   // OOZFILTER
+    ife re_tg 916 set re_result 1    // FIREEXT
+    ifn re_result 0
+    {
+        getactor[re_a].cstat re_tg and re_tg 32768 ifn re_tg 0 set re_result 0
+        getactor[re_a].extra re_tg ifl re_tg 0 set re_result 0
+    }
+ends
+
 defstate re_acquire_target
     set re_aim_target -1 set re_best 2147483647
     for re_k spritesofstatus 1
@@ -120,6 +142,29 @@ defstate re_acquire_target
             }
         }
     }
+    ifl re_aim_target 0
+    {
+        set re_best 2147483647
+        for re_k allsprites
+        {
+            set re_a re_k state re_is_object_target
+            ifn re_result 0
+            {
+                ldist re_tmp3 THISACTOR re_k
+                ifle re_tmp3 RE_AIM_RANGE ifl re_tmp3 re_best
+                {
+                    set re_a re_k state re_jill_sees
+                    ifn re_result 0 { set re_aim_target re_k set re_best re_tmp3 }
+                }
+            }
+        }
+    }
+ends
+
+// in: re_a = sprite. out: re_result = 1 while it is still a valid aim target.
+defstate re_is_aim_target
+    state re_is_enemy
+    ife re_result 0 state re_is_object_target
 ends
 
 // Steering toward the locked target: Jill ((id&1)+6)*32 or id*32+0xf0 per tick.
@@ -127,7 +172,7 @@ defstate re_follow_target
     set re_tmp 0
     ifge re_aim_target 0
     {
-        set re_a re_aim_target state re_is_enemy
+        set re_a re_aim_target state re_is_aim_target
         ifn re_result 0
         {
             ldist re_tmp3 THISACTOR re_aim_target
@@ -157,6 +202,7 @@ ends
 // fires Duke's pistol shot, the shotgun Duke's 7-pellet shotgun spread. Aim
 // direction (up/down) tilts the shot when no target is auto-aimed.
 defstate re_fire
+    ifn re_debug 0 { set re_tmp re_qty[re_equipped] al re_tmp }
     ife re_animframe 5
     {
         ife re_visible_weapon ITEM_SHOTGUN set re_a RE_SND_SHOTGUN else set re_a RE_SND_HANDGUN
@@ -165,6 +211,22 @@ defstate re_fire
     set re_tmp 100
     set re_tmp2 re_aimflags and re_tmp2 0x80 ifn re_tmp2 0 set re_tmp 164
     set re_tmp2 re_aimflags and re_tmp2 0x20 ifn re_tmp2 0 set re_tmp 36
+    // A locked target is hit at its middle: shot slope (100-horiz)/8 z per xy.
+    ifge re_aim_target 0
+    {
+        set re_a re_aim_target state re_is_aim_target
+        ifn re_result 0
+        {
+            getactor[re_aim_target].z re_tmp2
+            getactor[re_aim_target].picnum re_tmp3 gettiledata[re_tmp3].ysize re_tmp3
+            getactor[re_aim_target].yrepeat re_d mul re_tmp3 re_d mul re_tmp3 2 sub re_tmp2 re_tmp3
+            getplayer[THISACTOR].posz re_tmp3 sub re_tmp2 re_tmp3
+            ldist re_d THISACTOR re_aim_target ifl re_d 1 set re_d 1
+            mul re_tmp2 8 div re_tmp2 re_d
+            set re_tmp 100 sub re_tmp re_tmp2
+            ifl re_tmp -99 set re_tmp -99 ifg re_tmp 299 set re_tmp 299
+        }
+    }
     setplayer[THISACTOR].horiz re_tmp
     setplayer[THISACTOR].horizoff 0
     ife re_visible_weapon ITEM_SHOTGUN

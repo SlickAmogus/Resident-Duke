@@ -59,7 +59,9 @@ def mesh(b,base,j):
  return np.array(points),np.array(normal),uv,triangles
 body=[mesh(emd,tmd,j) for j in range(joints)];weapon=mesh(w12,u32(w12,len(w12)-4),0);shotgun=mesh(w13,u32(w13,len(w13)-4),0)
 assert not np.array_equal(body[14][0],weapon[0])
-# GZDoom axes (x forward, y left, z up) mirrored on y for Build's south-pointing y axis.
+# RE (x forward, y down, z) to EDuke32 model space: x forward, z up, and a
+# proper rotation. Upstream's GZDoom basis (x,-z,-y) is a mirror image, which in
+# EDuke32 shows the Beretta in Jill's left hand.
 def coord(v,scale):return np.stack((v[:,0],v[:,2],-v[:,1]),axis=1)*scale
 for armed,name in [(True,'jill.md3'),(False,'jill-unarmed.md3'),(True,'jill-shotgun.md3')]:
  surfaces=[];bounds=[];nf=len(poses)
