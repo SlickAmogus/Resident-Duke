@@ -61,6 +61,34 @@ def _sprite(x, y, z, picnum, sect, ang=0, cstat=0, xrepeat=MODEL_REPEAT, yrepeat
     return s
 
 
+# Duke's step-up limit: eye height (38<<8) minus clipmove's floor allowance
+# (20<<8) = 4608 z. Higher ledges need a jump, which Jill (RE) cannot do.
+STEP_UP = 4608
+
+
+def off_ledge(m, x, y, sect):
+    """If (x, y) sits on a jump-only ledge, return a point just off it on the
+    highest reachable neighbouring floor (pushed 320 units past the shared
+    wall), else None."""
+    floor = m.floor_z(sect, x, y); best = None
+    for w in m.sector_walls(sect):
+        n = int(m.walls[w]['nextsector'])
+        if n < 0:
+            continue
+        (ax, ay), (bx, by) = m.wall_segment(w)
+        mx, my = (ax + bx) / 2, (ay + by) / 2
+        nf = m.floor_z(n, mx, my)
+        if nf - floor <= STEP_UP:
+            return None  # an ordinary step leads onto this sector
+        # Outward normal of a Build wall: walls run clockwise around their sector.
+        dx, dy = bx - ax, by - ay; length = (dx * dx + dy * dy) ** .5 or 1
+        px, py = mx + dy / length * 320, my - dx / length * 320
+        cand = (nf, int(px), int(py), n)
+        if m.find_sector(int(px), int(py), n) == n and (best is None or nf < best[0]):
+            best = cand
+    return None if best is None else best[1:]
+
+
 def convert_pickups(m, tiles_by_kind):
     """Rewrite Duke pickups in place; returns (kept sprite records, report)."""
     kept = []; report = {'converted': {}, 'removed': 0}; shotgun_used = False
@@ -75,6 +103,10 @@ def convert_pickups(m, tiles_by_kind):
             s = s.copy()
             s['picnum'] = tiles_by_kind[kind]; s['lotag'] = PICKUP_KINDS.index(kind)
             s['xrepeat'] = s['yrepeat'] = MODEL_REPEAT; s['cstat'] = 0; s['pal'] = 0
+            moved = off_ledge(m, int(s['x']), int(s['y']), int(s['sectnum']))
+            if moved:
+                s['x'], s['y'], s['sectnum'] = moved
+                report.setdefault('moved_off_ledges', []).append(kind)
             s['z'] = m.floor_z(int(s['sectnum']), int(s['x']), int(s['y']))
             report['converted'][kind] = report['converted'].get(kind, 0) + 1
         elif pic in DUKE_REMOVED:

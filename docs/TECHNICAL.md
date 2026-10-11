@@ -56,6 +56,8 @@ The original geometry, enemies and effectors are kept. Duke pickups become RE pi
 
 Items with no RE counterpart are removed. Enemy drops are converted the same way at runtime.
 
+Pickups that Duke reached by jumping onto a ledge more than 4608 z units high (Duke's step limit) are moved just off the ledge, because Jill cannot jump. In E1L1 this affects the sword key and one herb.
+
 The sword key operates E1L1's red access switch. The item box, a typewriter and an ink ribbon are placed in Jill's opening shot on the roof.
 
 **Explosive objects.** E1L1 is entered by shooting the explosive charge beside the roof vent. RE auto-aim therefore also targets Duke's explosive objects (charges, barrels, extinguishers) when no enemy is in view, and aims each shot at its target's middle.
