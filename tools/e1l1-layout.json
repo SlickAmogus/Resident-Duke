@@ -1,6 +1,22 @@
 {
   "_comment": "Hand-tunable E1L1 layout. Edit here or with the Blender editor (edit_layout.bat), then run setup.py --build-only.",
   "jill_scale": 1.5,
-  "stations": {},
+  "stations": {
+    "itembox": {
+      "x": -33651,
+      "y": 10521,
+      "ang": 1841
+    },
+    "ribbon": {
+      "x": -31410,
+      "y": 7997,
+      "ang": 1446
+    },
+    "typewriter": {
+      "x": -33381,
+      "y": 11174,
+      "ang": 1652
+    }
+  },
   "cameras": {}
 }

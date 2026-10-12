@@ -24,6 +24,71 @@ gamevar re_park_stat 0 0
 gamevar re_park_spr 0 0
 gamevar re_park_i 0 0
 gamevar re_park_t 0 0
+// changespritestat into STAT_ACTOR/STAT_ZOMBIEACTOR from a higher status
+// resets the actor's AI state (gameexec.cpp CON_CHANGESPRITESTAT: t_data,
+// timers, flags, hitag). Parked actors keep theirs: saved here, restored after.
+gamevar re_sv_t0 0 2
+gamevar re_sv_t1 0 2
+gamevar re_sv_t2 0 2
+gamevar re_sv_t3 0 2
+gamevar re_sv_t4 0 2
+gamevar re_sv_t5 0 2
+gamevar re_sv_t6 0 2
+gamevar re_sv_t7 0 2
+gamevar re_sv_t8 0 2
+gamevar re_sv_t9 0 2
+gamevar re_sv_ttsleep 0 2
+gamevar re_sv_cgg 0 2
+gamevar re_sv_movflag 0 2
+gamevar re_sv_tempang 0 2
+gamevar re_sv_dispic 0 2
+gamevar re_sv_flags 0 2
+gamevar re_sv_lastvx 0 2
+gamevar re_sv_lastvy 0 2
+gamevar re_sv_hitag 0 2
+defstate re_park_save_actor
+    getactor[re_park_spr].htg_t 0 re_park_t setactorvar[re_park_spr].re_sv_t0 re_park_t
+    getactor[re_park_spr].htg_t 1 re_park_t setactorvar[re_park_spr].re_sv_t1 re_park_t
+    getactor[re_park_spr].htg_t 2 re_park_t setactorvar[re_park_spr].re_sv_t2 re_park_t
+    getactor[re_park_spr].htg_t 3 re_park_t setactorvar[re_park_spr].re_sv_t3 re_park_t
+    getactor[re_park_spr].htg_t 4 re_park_t setactorvar[re_park_spr].re_sv_t4 re_park_t
+    getactor[re_park_spr].htg_t 5 re_park_t setactorvar[re_park_spr].re_sv_t5 re_park_t
+    getactor[re_park_spr].htg_t 6 re_park_t setactorvar[re_park_spr].re_sv_t6 re_park_t
+    getactor[re_park_spr].htg_t 7 re_park_t setactorvar[re_park_spr].re_sv_t7 re_park_t
+    getactor[re_park_spr].htg_t 8 re_park_t setactorvar[re_park_spr].re_sv_t8 re_park_t
+    getactor[re_park_spr].htg_t 9 re_park_t setactorvar[re_park_spr].re_sv_t9 re_park_t
+    getactor[re_park_spr].httimetosleep re_park_t setactorvar[re_park_spr].re_sv_ttsleep re_park_t
+    getactor[re_park_spr].htcgg re_park_t setactorvar[re_park_spr].re_sv_cgg re_park_t
+    getactor[re_park_spr].htmovflag re_park_t setactorvar[re_park_spr].re_sv_movflag re_park_t
+    getactor[re_park_spr].httempang re_park_t setactorvar[re_park_spr].re_sv_tempang re_park_t
+    getactor[re_park_spr].htdispicnum re_park_t setactorvar[re_park_spr].re_sv_dispic re_park_t
+    getactor[re_park_spr].htflags re_park_t setactorvar[re_park_spr].re_sv_flags re_park_t
+    getactor[re_park_spr].htlastvx re_park_t setactorvar[re_park_spr].re_sv_lastvx re_park_t
+    getactor[re_park_spr].htlastvy re_park_t setactorvar[re_park_spr].re_sv_lastvy re_park_t
+    getactor[re_park_spr].hitag re_park_t setactorvar[re_park_spr].re_sv_hitag re_park_t
+ends
+defstate re_park_restore_actor
+    getactorvar[re_park_spr].re_sv_t0 re_park_t setactor[re_park_spr].htg_t 0 re_park_t
+    getactorvar[re_park_spr].re_sv_t1 re_park_t setactor[re_park_spr].htg_t 1 re_park_t
+    getactorvar[re_park_spr].re_sv_t2 re_park_t setactor[re_park_spr].htg_t 2 re_park_t
+    getactorvar[re_park_spr].re_sv_t3 re_park_t setactor[re_park_spr].htg_t 3 re_park_t
+    getactorvar[re_park_spr].re_sv_t4 re_park_t setactor[re_park_spr].htg_t 4 re_park_t
+    getactorvar[re_park_spr].re_sv_t5 re_park_t setactor[re_park_spr].htg_t 5 re_park_t
+    getactorvar[re_park_spr].re_sv_t6 re_park_t setactor[re_park_spr].htg_t 6 re_park_t
+    getactorvar[re_park_spr].re_sv_t7 re_park_t setactor[re_park_spr].htg_t 7 re_park_t
+    getactorvar[re_park_spr].re_sv_t8 re_park_t setactor[re_park_spr].htg_t 8 re_park_t
+    getactorvar[re_park_spr].re_sv_t9 re_park_t setactor[re_park_spr].htg_t 9 re_park_t
+    getactorvar[re_park_spr].re_sv_ttsleep re_park_t setactor[re_park_spr].httimetosleep re_park_t
+    getactorvar[re_park_spr].re_sv_cgg re_park_t setactor[re_park_spr].htcgg re_park_t
+    getactorvar[re_park_spr].re_sv_movflag re_park_t setactor[re_park_spr].htmovflag re_park_t
+    getactorvar[re_park_spr].re_sv_tempang re_park_t setactor[re_park_spr].httempang re_park_t
+    getactorvar[re_park_spr].re_sv_dispic re_park_t setactor[re_park_spr].htdispicnum re_park_t
+    getactorvar[re_park_spr].re_sv_flags re_park_t setactor[re_park_spr].htflags re_park_t
+    getactorvar[re_park_spr].re_sv_lastvx re_park_t setactor[re_park_spr].htlastvx re_park_t
+    getactorvar[re_park_spr].re_sv_lastvy re_park_t setactor[re_park_spr].htlastvy re_park_t
+    getactorvar[re_park_spr].re_sv_hitag re_park_t setactor[re_park_spr].hitag re_park_t
+ends
+
 defstate re_set_frozen  // in: re_a = 1 freeze, 0 thaw
     ifn re_a re_frozen
     {
@@ -35,6 +100,7 @@ defstate re_set_frozen  // in: re_a = 1 freeze, 0 thaw
             {
                 for re_park_spr spritesofstatus re_park_stat
                 {
+                    ifle re_park_stat 2 state re_park_save_actor
                     set re_park_t re_park_stat add re_park_t STAT_PARK_BASE
                     changespritestat re_park_spr re_park_t
                 }
@@ -43,7 +109,10 @@ defstate re_set_frozen  // in: re_a = 1 freeze, 0 thaw
             {
                 set re_park_t re_park_stat add re_park_t STAT_PARK_BASE
                 for re_park_spr spritesofstatus re_park_t
+                {
                     changespritestat re_park_spr re_park_stat
+                    ifle re_park_stat 2 state re_park_restore_actor
+                }
             }
         }
     }
